@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Plus, Send, Clock, User, ArrowLeft, RefreshCw } from 'lucide-react';
+import { MessageSquare, Plus, Send, Clock, User, ArrowLeft, RefreshCw, Lock, LogIn } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import { WikiPage, TalkComment } from '../types/wiki';
 import { subscribeToPageTalks, addTalkComment } from '../services/wikiService';
@@ -12,7 +12,7 @@ interface TalkViewProps {
 }
 
 export const TalkView: React.FC<TalkViewProps> = ({ page, slug, onBackToArticle }) => {
-  const { currentUser, existingPageSlugs } = useWiki();
+  const { currentUser, existingPageSlugs, loginWithGoogle } = useWiki();
 
   const [topics, setTopics] = useState<TalkComment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +36,10 @@ export const TalkView: React.FC<TalkViewProps> = ({ page, slug, onBackToArticle 
 
   const handleAddTopic = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (currentUser.isAnonymous) {
+      alert('Contribuições não são permitidas sem login.');
+      return;
+    }
     if (!newTopicTitle.trim() || !newTopicContent.trim() || isSubmitting) return;
 
     setIsSubmitting(true);
@@ -104,7 +108,22 @@ export const TalkView: React.FC<TalkViewProps> = ({ page, slug, onBackToArticle 
 
       {/* Add Topic Toggle */}
       <div className="mb-4">
-        {!showNewTopicForm ? (
+        {currentUser.isAnonymous ? (
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-900 dark:text-amber-200 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>Contribuições na discussão requerem login. Autentique-se para abrir novos tópicos.</span>
+            </div>
+            <button
+              type="button"
+              onClick={loginWithGoogle}
+              className="px-3 py-1 bg-[#3366cc] hover:bg-[#254b99] text-white rounded font-medium text-xs flex items-center gap-1 shadow-2xs cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Entrar com Google</span>
+            </button>
+          </div>
+        ) : !showNewTopicForm ? (
           <button
             type="button"
             onClick={() => setShowNewTopicForm(true)}

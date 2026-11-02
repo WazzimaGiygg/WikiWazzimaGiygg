@@ -14,6 +14,8 @@ import {
   AlertCircle,
   Tag,
   ArrowRight,
+  Lock,
+  LogIn,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import { WikiPage } from '../types/wiki';
@@ -34,7 +36,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
   onViewHistory,
   onViewTalk,
 }) => {
-  const { existingPageSlugs, navigateToPage, activeTab, setActiveTab } = useWiki();
+  const { existingPageSlugs, navigateToPage, activeTab, setActiveTab, currentUser, loginWithGoogle } = useWiki();
   const [showTOC, setShowTOC] = useState(true);
   const [isWatched, setIsWatched] = useState(false);
 
@@ -109,16 +111,29 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
             <div>
               <p className="font-semibold text-base mb-1">O WikiWazzimaGiygg não possui esta página salva no Firebase.</p>
               <p className="text-xs text-amber-800 dark:text-amber-300 mb-3">
-                Você pode criar este artigo agora mesmo utilizando a sintaxe de wikitexto. As alterações serão salvas diretamente no Firebase Firestore.
+                {currentUser.isAnonymous
+                  ? 'Contribuições sem login não são permitidas. Para criar e salvar esta página no Firestore, entre com sua conta.'
+                  : 'Você pode criar este artigo agora mesmo utilizando a sintaxe de wikitexto. As alterações serão salvas diretamente no Firebase Firestore.'}
               </p>
-              <button
-                type="button"
-                onClick={() => onEdit()}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-[#3366cc] hover:bg-[#254b99] text-white rounded font-medium text-xs shadow-2xs"
-              >
-                <Edit3 className="w-4 h-4" />
-                <span>Criar a página &quot;{slug.replace(/_/g, ' ')}&quot;</span>
-              </button>
+              {currentUser.isAnonymous ? (
+                <button
+                  type="button"
+                  onClick={loginWithGoogle}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#3366cc] hover:bg-[#254b99] text-white rounded font-medium text-xs shadow-2xs cursor-pointer"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Fazer login para criar esta página</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onEdit()}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#3366cc] hover:bg-[#254b99] text-white rounded font-medium text-xs shadow-2xs cursor-pointer"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  <span>Criar a página &quot;{slug.replace(/_/g, ' ')}&quot;</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

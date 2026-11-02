@@ -3,6 +3,10 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.size() > 0;
     }
@@ -43,40 +47,40 @@ service cloud.firestore {
     // Wiki Pages collection
     match /wiki_pages/{pageId} {
       allow read: if true;
-      allow create: if isValidPage(request.resource.data);
-      allow update: if isValidPage(request.resource.data);
-      allow delete: if request.auth != null;
+      allow create: if isSignedIn() && isValidPage(request.resource.data);
+      allow update: if isSignedIn() && isValidPage(request.resource.data);
+      allow delete: if isSignedIn();
 
-      // Revisions subcollection (immutable)
+      // Revisions subcollection (immutable, authenticated only)
       match /revisions/{revId} {
         allow read: if true;
-        allow create: if isValidRevision(request.resource.data);
-        allow update: if false; // Revisions are immutable in MediaWiki
-        allow delete: if request.auth != null;
+        allow create: if isSignedIn() && isValidRevision(request.resource.data);
+        allow update: if false; // Revisions are immutable
+        allow delete: if isSignedIn();
       }
 
-      // Talks subcollection (discussion comments)
+      // Talks subcollection (discussion comments, authenticated only)
       match /talks/{talkId} {
         allow read: if true;
-        allow create: if isValidTalk(request.resource.data);
-        allow update: if isValidTalk(request.resource.data);
-        allow delete: if request.auth != null;
+        allow create: if isSignedIn() && isValidTalk(request.resource.data);
+        allow update: if isSignedIn() && isValidTalk(request.resource.data);
+        allow delete: if isSignedIn();
       }
     }
 
-    // Recent changes log
+    // Recent changes log (authenticated only)
     match /recent_changes/{changeId} {
       allow read: if true;
-      allow create: if isValidRecentChange(request.resource.data);
+      allow create: if isSignedIn() && isValidRecentChange(request.resource.data);
       allow update: if false; // Recent change log is append-only
-      allow delete: if request.auth != null;
+      allow delete: if isSignedIn();
     }
 
-    // Wiki settings configuration
+    // Wiki settings configuration (authenticated only)
     match /wiki_settings/{settingId} {
       allow read: if true;
-      allow create, update: if isValidSettings(request.resource.data);
-      allow delete: if request.auth != null;
+      allow create, update: if isSignedIn() && isValidSettings(request.resource.data);
+      allow delete: if isSignedIn();
     }
 
     // Default deny

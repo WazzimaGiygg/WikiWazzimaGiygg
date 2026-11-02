@@ -13,7 +13,7 @@ interface HistoryViewProps {
 }
 
 export const HistoryView: React.FC<HistoryViewProps> = ({ page, slug, onBackToArticle }) => {
-  const { currentUser, existingPageSlugs } = useWiki();
+  const { currentUser, existingPageSlugs, loginWithGoogle } = useWiki();
 
   const [revisions, setRevisions] = useState<PageRevision[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +59,12 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ page, slug, onBackToAr
 
   // Handle rollback / revert to a past revision
   const handleRollback = async (targetRev: PageRevision) => {
+    if (currentUser.isAnonymous) {
+      alert('Contribuições não são permitidas sem login. Por favor, autentique-se para reverter edições.');
+      loginWithGoogle();
+      return;
+    }
+
     if (
       !window.confirm(
         `Tem certeza que deseja reverter a página para a revisão de ${formatDate(

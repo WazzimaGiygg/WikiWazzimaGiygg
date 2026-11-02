@@ -16,6 +16,8 @@ import {
   Sparkles,
   HelpCircle,
   FileCode,
+  Lock,
+  LogIn,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import { WikiPage } from '../types/wiki';
@@ -37,7 +39,7 @@ export const EditView: React.FC<EditViewProps> = ({
   onSaved,
   onCancel,
 }) => {
-  const { currentUser, existingPageSlugs } = useWiki();
+  const { currentUser, existingPageSlugs, loginWithGoogle } = useWiki();
 
   const [content, setContent] = useState<string>(() => {
     return page?.content || `== Introdução ==\nEscreva o conteúdo do seu artigo aqui em wikitexto.\n\n== Detalhes ==\n* Item 1\n* Item 2\n\n[[Categoria:Geral]]`;
@@ -90,6 +92,10 @@ export const EditView: React.FC<EditViewProps> = ({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (currentUser.isAnonymous) {
+      setErrorMessage('Contribuições não são permitidas sem login. Por favor, entre com sua conta para poder publicar alterações.');
+      return;
+    }
     if (!content.trim()) {
       setErrorMessage('O conteúdo da página não pode estar vazio.');
       return;
@@ -139,6 +145,28 @@ export const EditView: React.FC<EditViewProps> = ({
           As alterações serão gravadas na coleção <code className="font-mono text-blue-600 dark:text-blue-400">/wiki_pages/{slug}</code> do Firestore com controle de revisões.
         </div>
       </div>
+
+      {currentUser.isAnonymous && (
+        <div className="mb-4 p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-900 dark:text-amber-200 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-start gap-2.5">
+            <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <div>
+              <div className="font-semibold text-sm">Login obrigatório para contribuir</div>
+              <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                O WikiWazzimaGiygg não permite edições sem login. Você pode redigir e pré-visualizar, mas precisará entrar com sua conta Google para publicar.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={loginWithGoogle}
+            className="px-3.5 py-1.5 bg-[#3366cc] hover:bg-[#254b99] text-white rounded font-medium text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer"
+          >
+            <LogIn className="w-3.5 h-3.5" />
+            <span>Entrar com Google</span>
+          </button>
+        </div>
+      )}
 
       {errorMessage && (
         <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-300">
@@ -314,15 +342,27 @@ export const EditView: React.FC<EditViewProps> = ({
 
         {/* Action Buttons */}
         <div className="pt-2 border-t border-gray-200 dark:border-gray-800 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            disabled={isSaving}
-            onClick={handleSave}
-            className="px-4 py-2 bg-[#3366cc] hover:bg-[#254b99] text-white font-medium rounded flex items-center gap-1.5 shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            <Save className="w-3.5 h-3.5" />
-            <span>{isSaving ? 'A publicar...' : 'Publicar alterações'}</span>
-          </button>
+          {currentUser.isAnonymous ? (
+            <button
+              type="button"
+              onClick={loginWithGoogle}
+              className="px-4 py-2 bg-[#3366cc] hover:bg-[#254b99] text-white font-medium rounded flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+              title="Faça login com sua conta para poder publicar alterações"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Entrar com Google para publicar</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={handleSave}
+              className="px-4 py-2 bg-[#3366cc] hover:bg-[#254b99] text-white font-medium rounded flex items-center gap-1.5 shadow-2xs transition-colors disabled:opacity-50 cursor-pointer"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{isSaving ? 'A publicar...' : 'Publicar alterações'}</span>
+            </button>
+          )}
 
           <button
             type="button"

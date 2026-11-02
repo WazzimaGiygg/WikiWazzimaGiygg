@@ -9,6 +9,7 @@ import {
   FileCode,
   Layers,
   ArrowRight,
+  LogIn,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import {
@@ -21,7 +22,7 @@ import {
 import { savePage } from '../services/wikiService';
 
 export const SpecialGitHubSync: React.FC = () => {
-  const { currentUser, navigateToPage } = useWiki();
+  const { currentUser, navigateToPage, loginWithGoogle } = useWiki();
 
   const [repoInfo, setRepoInfo] = useState<GitHubRepoInfo | null>(null);
   const [commits, setCommits] = useState<GitHubCommit[]>([]);
@@ -55,6 +56,11 @@ export const SpecialGitHubSync: React.FC = () => {
 
   const handleSyncToWiki = async () => {
     if (!repoInfo) return;
+    if (currentUser.isAnonymous) {
+      alert('Contribuições e sincronizações não são permitidas sem login. Por favor, autentique-se primeiro.');
+      loginWithGoogle();
+      return;
+    }
     setIsImporting(true);
     setSyncStatus(null);
 
@@ -195,15 +201,27 @@ No WikiWazzimaGiygg, a engine foi portada para TypeScript e Google Cloud Firesto
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleSyncToWiki}
-                  disabled={isImporting}
-                  className="px-4 py-2 bg-[#3366cc] hover:bg-[#254b99] text-white rounded font-medium text-xs flex items-center gap-2 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
-                >
-                  <Download className={`w-4 h-4 ${isImporting ? 'animate-bounce' : ''}`} />
-                  <span>{isImporting ? 'A sincronizar com Firestore...' : 'Sincronizar dados para este Wiki'}</span>
-                </button>
+                {currentUser.isAnonymous ? (
+                  <button
+                    type="button"
+                    onClick={loginWithGoogle}
+                    className="px-4 py-2 bg-[#3366cc] hover:bg-[#254b99] text-white rounded font-medium text-xs flex items-center gap-2 shadow-2xs transition-colors cursor-pointer"
+                    title="Faça login com sua conta para sincronizar dados com o Firestore"
+                  >
+                    <LogIn className="w-4 h-4" />
+                    <span>Entrar com Google para sincronizar</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleSyncToWiki}
+                    disabled={isImporting}
+                    className="px-4 py-2 bg-[#3366cc] hover:bg-[#254b99] text-white rounded font-medium text-xs flex items-center gap-2 shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <Download className={`w-4 h-4 ${isImporting ? 'animate-bounce' : ''}`} />
+                    <span>{isImporting ? 'A sincronizar com Firestore...' : 'Sincronizar dados para este Wiki'}</span>
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3">

@@ -33,7 +33,7 @@ interface WikiContextType {
 const DEFAULT_SETTINGS: WikiSettings = {
   sitename: 'WikiWazzimaGiygg',
   languageCode: 'pt-br',
-  allowAnonymousEditing: true,
+  allowAnonymousEditing: false,
   enableLivePreview: true,
   defaultSkin: 'vector-modern',
   maxRecentChanges: 50,
@@ -60,6 +60,7 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
       if (parsed.sitename === 'MediaWiki TS') {
         parsed.sitename = 'WikiWazzimaGiygg';
       }
+      parsed.allowAnonymousEditing = false;
       return { ...DEFAULT_SETTINGS, ...parsed };
     }
     return DEFAULT_SETTINGS;
