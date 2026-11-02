@@ -7,6 +7,7 @@ import {
   subscribeToWikiSettings,
   saveWikiSettingsToFirestore,
   seedInitialPagesIfNeeded,
+  ensureUserPagesExist,
 } from '../services/wikiService';
 import { slugify } from '../core/parser';
 
@@ -28,6 +29,8 @@ interface WikiContextType {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   isRealtimeConnected: boolean;
+  userPageSlug?: string;
+  userTalkSlug?: string;
 }
 
 const DEFAULT_SETTINGS: WikiSettings = {
@@ -71,6 +74,13 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [userPagesInfo, setUserPagesInfo] = useState<{
+    userPageSlug: string;
+    userTalkSlug: string;
+    userPageTitle: string;
+    userTalkTitle: string;
+    isDisambiguated: boolean;
+  } | null>(null);
 
   // Sync hash routing e.g. #/wiki/MediaWiki or #/wiki/MediaWiki?action=edit
   useEffect(() => {
@@ -98,10 +108,24 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  // Listen for auth state
+  // Listen for auth state and automatically ensure user page and user talk page exist in Firestore
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, user => {
+    const unsubscribe = onAuthStateChanged(auth, async user => {
       setFirebaseUser(user);
+      if (user && !user.isAnonymous) {
+        try {
+          const res = await ensureUserPagesExist({
+            uid: user.uid,
+            displayName: user.displayName,
+            email: user.email,
+          });
+          setUserPagesInfo(res);
+        } catch (err) {
+          console.warn('Could not auto-create user pages on login:', err);
+        }
+      } else {
+        setUserPagesInfo(null);
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -207,6 +231,10 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
         avatarUrl: firebaseUser.photoURL || undefined,
         editCount: 1,
         joinedAt: firebaseUser.metadata.creationTime || new Date().toISOString(),
+        userPageSlug: userPagesInfo?.userPageSlug,
+        userTalkSlug: userPagesInfo?.userTalkSlug,
+        userPageTitle: userPagesInfo?.userPageTitle,
+        userTalkTitle: userPagesInfo?.userTalkTitle,
       }
     : {
         uid: `anon_${guestName}`,
@@ -236,6 +264,8 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
         sidebarOpen,
         setSidebarOpen,
         isRealtimeConnected,
+        userPageSlug: userPagesInfo?.userPageSlug,
+        userTalkSlug: userPagesInfo?.userTalkSlug,
       }}
     >
       {children}

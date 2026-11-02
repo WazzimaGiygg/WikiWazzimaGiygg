@@ -13,7 +13,7 @@ interface HistoryViewProps {
 }
 
 export const HistoryView: React.FC<HistoryViewProps> = ({ page, slug, onBackToArticle }) => {
-  const { currentUser, existingPageSlugs, loginWithGoogle } = useWiki();
+  const { currentUser, existingPageSlugs, loginWithGoogle, navigateToPage } = useWiki();
 
   const [revisions, setRevisions] = useState<PageRevision[]>([]);
   const [loading, setLoading] = useState(true);
@@ -323,9 +323,13 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ page, slug, onBackToAr
                 )}
 
                 {/* Author */}
-                <span className="text-gray-700 dark:text-gray-300 font-medium">
+                <button
+                  type="button"
+                  onClick={() => navigateToPage(`Usuário:${rev.author}`)}
+                  className="text-[#0645ad] dark:text-[#6ba4ff] hover:underline font-medium cursor-pointer"
+                >
                   {rev.author}
-                </span>
+                </button>
 
                 {/* Byte size */}
                 <span className="text-gray-500 font-mono text-[11px]">

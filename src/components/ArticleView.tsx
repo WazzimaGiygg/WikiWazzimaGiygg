@@ -312,7 +312,13 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             Esta página foi editada pela última vez às <span className="font-medium">{formattedDate}</span> por{' '}
-            <span className="font-medium text-gray-700 dark:text-gray-300">{page.author}</span>.
+            <button
+              type="button"
+              onClick={() => navigateToPage(`Usuário:${page.author}`)}
+              className="font-medium text-[#0645ad] dark:text-[#6ba4ff] hover:underline cursor-pointer"
+            >
+              {page.author}
+            </button>.
           </div>
           <div className="font-mono text-[10px]">
             Revisão #{page.revisionCount} ({page.latestRevisionId.slice(0, 10)})

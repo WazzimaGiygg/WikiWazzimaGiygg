@@ -328,6 +328,21 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
                     </div>
                   </div>
 
+                  {!currentUser.isAnonymous && (
+                    <div className="bg-blue-50 dark:bg-blue-950/40 p-2 rounded border border-blue-200 dark:border-blue-800 text-[11px] text-blue-900 dark:text-blue-200 space-y-1">
+                      <div className="font-semibold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>Espaço pessoal sincronizado</span>
+                      </div>
+                      <div className="text-[10px] text-gray-600 dark:text-gray-300 font-mono truncate">
+                        {currentUser.userPageTitle || `Usuário:${currentUser.username}`}
+                      </div>
+                      <div className="text-[9px] text-gray-500 dark:text-gray-400 font-mono">
+                        UID: {currentUser.uid}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
                     No WikiWazzimaGiygg, edições são associadas a este identificador com imutabilidade registrada no Firestore.
                   </div>
@@ -337,22 +352,30 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
                   <button
                     type="button"
                     onClick={() => {
-                      navigateToPage(`Usuário:${currentUser.username}`);
+                      const target = currentUser.userPageSlug || `Usuário:${currentUser.username}`;
+                      navigateToPage(target);
                       setShowUserMenu(false);
                     }}
-                    className="text-left py-1 text-blue-600 dark:text-blue-400 hover:underline"
+                    className="text-left py-1 text-blue-600 dark:text-blue-400 hover:underline flex items-center justify-between"
                   >
-                    Página de usuário
+                    <span>Página de usuário</span>
+                    <span className="text-[10px] text-gray-400 font-mono">
+                      {currentUser.userPageSlug ? 'Ativa' : 'Abrir'}
+                    </span>
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      navigateToPage(`Discussão_Usuário:${currentUser.username}`);
+                      const target = currentUser.userTalkSlug || `Discussão_Usuário:${currentUser.username}`;
+                      navigateToPage(target);
                       setShowUserMenu(false);
                     }}
-                    className="text-left py-1 text-blue-600 dark:text-blue-400 hover:underline"
+                    className="text-left py-1 text-blue-600 dark:text-blue-400 hover:underline flex items-center justify-between"
                   >
-                    Página de discussão
+                    <span>Página de discussão</span>
+                    <span className="text-[10px] text-gray-400 font-mono">
+                      {currentUser.userTalkSlug ? 'Ativa' : 'Abrir'}
+                    </span>
                   </button>
                   <button
                     type="button"

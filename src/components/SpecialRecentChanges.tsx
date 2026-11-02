@@ -181,9 +181,13 @@ export const SpecialRecentChanges: React.FC = () => {
                       <span className="text-gray-400">. .</span>
 
                       {/* Author */}
-                      <span className="text-gray-800 dark:text-gray-200 font-medium">
+                      <button
+                        type="button"
+                        onClick={() => navigateToPage(`Usuário:${item.author}`)}
+                        className="text-[#0645ad] dark:text-[#6ba4ff] hover:underline font-medium cursor-pointer"
+                      >
                         {item.author}
-                      </span>
+                      </button>
 
                       {/* Summary */}
                       {item.summary && (

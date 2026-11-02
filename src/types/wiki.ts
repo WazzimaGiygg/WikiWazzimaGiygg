@@ -68,6 +68,10 @@ export interface WikiUser {
   avatarUrl?: string;
   editCount: number;
   joinedAt: string;
+  userPageSlug?: string;
+  userTalkSlug?: string;
+  userPageTitle?: string;
+  userTalkTitle?: string;
 }
 
 export interface TOCItem {

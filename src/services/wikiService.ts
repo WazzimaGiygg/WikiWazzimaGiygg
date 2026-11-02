@@ -291,11 +291,12 @@ export async function savePage(params: {
 
   let namespace: PageNamespace = params.namespace || 'Main';
   if (params.title.startsWith('Ajuda:') || params.title.startsWith('Help:')) namespace = 'Help';
-  else if (params.title.startsWith('Discussão:') || params.title.startsWith('Talk:')) namespace = 'Talk';
+  else if (params.title.startsWith('Discussão:') || params.title.startsWith('Talk:') || params.title.startsWith('Discussão_Usuário:')) namespace = 'Talk';
   else if (params.title.startsWith('Especial:') || params.title.startsWith('Special:')) namespace = 'Special';
   else if (params.title.startsWith('Manual:')) namespace = 'Manual';
   else if (params.title.startsWith('Predefinição:') || params.title.startsWith('Template:')) namespace = 'Template';
   else if (params.title.startsWith('Categoria:') || params.title.startsWith('Category:')) namespace = 'Category';
+  else if (params.title.startsWith('Usuário:') || params.title.startsWith('User:')) namespace = 'User';
 
   const categoryMatches = params.content.matchAll(/\[\[(?:Categoria|Category):([^\]]+)\]\]/gi);
   const categories: string[] = [];
@@ -430,5 +431,217 @@ export async function searchWikiPages(searchQuery: string): Promise<WikiPage[]> 
       page.slug.toLowerCase().includes(trimmed) ||
       page.categories.some(c => c.toLowerCase().includes(trimmed))
     );
+  });
+}
+
+export interface UserPagesResult {
+  userPageSlug: string;
+  userTalkSlug: string;
+  userPageTitle: string;
+  userTalkTitle: string;
+  isDisambiguated: boolean;
+  createdPages: string[];
+}
+
+/**
+ * Creates initial user page (Usuário:<Nome>) and user talk page (Discussão_Usuário:<Nome>)
+ * automatically in Firestore upon first login.
+ * If another user already exists with the same name, disambiguates by appending Google UID
+ * (Usuário:<Nome> (<UID>)) to ensure pages are never shared or overwritten between users.
+ */
+export async function ensureUserPagesExist(user: {
+  uid: string;
+  displayName?: string | null;
+  email?: string | null;
+}): Promise<UserPagesResult> {
+  const baseName = (user.displayName || user.email?.split('@')[0] || 'Usuário').trim();
+  const createdPages: string[] = [];
+
+  const disambiguatedTitle = `Usuário:${baseName} (${user.uid})`;
+  const disambiguatedTalkTitle = `Discussão_Usuário:${baseName} (${user.uid})`;
+  const standardTitle = `Usuário:${baseName}`;
+  const standardTalkTitle = `Discussão_Usuário:${baseName}`;
+
+  // 1. Check if user already has an existing disambiguated page they own
+  const userDisambiguatedPage = await getPage(disambiguatedTitle);
+  if (userDisambiguatedPage && userDisambiguatedPage.authorId === user.uid) {
+    const existingTalk = await getPage(disambiguatedTalkTitle);
+    if (!existingTalk) {
+      await createInitialUserTalkPage(disambiguatedTalkTitle, baseName, user.uid);
+      createdPages.push(disambiguatedTalkTitle);
+    }
+    return {
+      userPageSlug: slugify(disambiguatedTitle),
+      userTalkSlug: slugify(disambiguatedTalkTitle),
+      userPageTitle: disambiguatedTitle,
+      userTalkTitle: disambiguatedTalkTitle,
+      isDisambiguated: true,
+      createdPages,
+    };
+  }
+
+  // 2. Check if standard page exists
+  const standardPage = await getPage(standardTitle);
+  if (standardPage) {
+    if (standardPage.authorId === user.uid) {
+      // The standard page is already owned by this exact user
+      const existingTalk = await getPage(standardTalkTitle);
+      if (!existingTalk) {
+        await createInitialUserTalkPage(standardTalkTitle, baseName, user.uid);
+        createdPages.push(standardTalkTitle);
+      }
+      return {
+        userPageSlug: slugify(standardTitle),
+        userTalkSlug: slugify(standardTalkTitle),
+        userPageTitle: standardTitle,
+        userTalkTitle: standardTalkTitle,
+        isDisambiguated: false,
+        createdPages,
+      };
+    } else {
+      // Collision detected! Another user already owns the standard title.
+      // Append the Google UID to the created page name:
+      const targetTitle = disambiguatedTitle;
+      const targetTalkTitle = disambiguatedTalkTitle;
+
+      const existingTarget = await getPage(targetTitle);
+      if (!existingTarget) {
+        await createInitialUserPage(targetTitle, baseName, user.uid, true);
+        createdPages.push(targetTitle);
+      }
+      const existingTargetTalk = await getPage(targetTalkTitle);
+      if (!existingTargetTalk) {
+        await createInitialUserTalkPage(targetTalkTitle, baseName, user.uid);
+        createdPages.push(targetTalkTitle);
+      }
+      return {
+        userPageSlug: slugify(targetTitle),
+        userTalkSlug: slugify(targetTalkTitle),
+        userPageTitle: targetTitle,
+        userTalkTitle: targetTalkTitle,
+        isDisambiguated: true,
+        createdPages,
+      };
+    }
+  }
+
+  // 3. Standard page doesn't exist yet. Check if another user with the same name exists anywhere in the wiki
+  const allPages = await getAllPagesList();
+  const anotherUserWithSameName = allPages.some(
+    p =>
+      p.author?.trim().toLowerCase() === baseName.toLowerCase() &&
+      p.authorId &&
+      p.authorId !== user.uid
+  );
+
+  let finalTitle = standardTitle;
+  let finalTalkTitle = standardTalkTitle;
+  let isDisambiguated = false;
+
+  if (anotherUserWithSameName) {
+    // Collision detected with another editor sharing the same name
+    finalTitle = disambiguatedTitle;
+    finalTalkTitle = disambiguatedTalkTitle;
+    isDisambiguated = true;
+  }
+
+  // Create user page if needed
+  const existingUserPage = await getPage(finalTitle);
+  if (!existingUserPage) {
+    await createInitialUserPage(finalTitle, baseName, user.uid, isDisambiguated);
+    createdPages.push(finalTitle);
+  }
+
+  // Create user talk page if needed
+  const existingTalkPage = await getPage(finalTalkTitle);
+  if (!existingTalkPage) {
+    await createInitialUserTalkPage(finalTalkTitle, baseName, user.uid);
+    createdPages.push(finalTalkTitle);
+  }
+
+  return {
+    userPageSlug: slugify(finalTitle),
+    userTalkSlug: slugify(finalTalkTitle),
+    userPageTitle: finalTitle,
+    userTalkTitle: finalTalkTitle,
+    isDisambiguated,
+    createdPages,
+  };
+}
+
+async function createInitialUserPage(
+  title: string,
+  userName: string,
+  uid: string,
+  hasDisambiguation: boolean
+): Promise<WikiPage> {
+  const content = `== Página de Usuário: ${userName} ==
+
+{| class="wikitable" style="width: 100%; max-width: 520px;"
+! Campo !! Detalhe
+|-
+| '''Usuário''' || ${userName}
+|-
+| '''Google UID''' || <code>${uid}</code>
+|-
+| '''Status''' || Colaborador Registrado
+|-
+| '''Registro''' || Página criada automaticamente no primeiro acesso
+|}
+
+=== Perfil do Usuário ===
+Esta é a página pessoal de '''${userName}''' no '''WikiWazzimaGiygg'''. Aqui ficam registrados o perfil de contribuição, tópicos de interesse e atalhos úteis.
+
+${
+  hasDisambiguation
+    ? `{{Aviso|'''Nota de Desambiguação de Nome:''' Como já existe outro usuário registrado com o nome "${userName}" na wiki, seu Google UID (<code>${uid}</code>) foi adicionado ao título da página para garantir que sua página seja individual e nunca compartilhada por duas pessoas.}}`
+    : ''
+}
+
+=== Navegação e Recursos ===
+* [[Especial:Mudanças_recentes|Acompanhar mudanças recentes da wiki]]
+* [[Ajuda:Wikitexto|Consultar o guia de sintaxe wikitexto]]
+* [[Especial:Todas_as_páginas|Explorar todas as páginas da WikiWazzimaGiygg]]
+
+[[Categoria:Usuários]]`;
+
+  return savePage({
+    slug: slugify(title),
+    title,
+    content,
+    summary: hasDisambiguation
+      ? 'Criação automática de página de usuário no primeiro acesso (desambiguação de UID)'
+      : 'Criação automática de página de usuário no primeiro acesso',
+    author: userName,
+    authorId: uid,
+    namespace: 'User',
+  });
+}
+
+async function createInitialUserTalkPage(
+  title: string,
+  userName: string,
+  uid: string
+): Promise<WikiPage> {
+  const content = `== Discussão de Usuário: ${userName} ==
+
+Esta é a página de discussão de '''${userName}''' no '''WikiWazzimaGiygg'''. Outros colaboradores autenticados podem utilizar este espaço para deixar mensagens, sugestões e orientações sobre edições.
+
+=== Boas-vindas ===
+Olá, '''${userName}'''! Seja muito bem-vindo(a) à comunidade WikiWazzimaGiygg.
+* Você pode usar esta página para receber notificações de outros editores.
+* Para iniciar uma nova conversa, use o botão de novo tópico ou edite esta seção.
+* Lembre-se sempre de manter uma comunicação respeitosa e construtiva.
+
+[[Categoria:Discussões_de_Usuários]]`;
+
+  return savePage({
+    slug: slugify(title),
+    title,
+    content,
+    summary: 'Criação automática de página de discussão de usuário no primeiro acesso',
+    author: userName,
+    authorId: uid,
+    namespace: 'Talk',
   });
 }

@@ -398,5 +398,5 @@ export function slugify(text: string): string {
   return text
     .trim()
     .replace(/[\s/]+/g, '_')
-    .replace(/[^\w\u00C0-\u024F_:.-]/g, '');
+    .replace(/[^\w\u00C0-\u024F_:.()-]/g, '');
 }
