@@ -1,0 +1,113 @@
+{
+  "entities": {
+    "WikiPage": {
+      "title": "WikiPage",
+      "description": "Represents an encyclopedia page or documentation article in MediaWiki TS",
+      "type": "object",
+      "properties": {
+        "slug": { "type": "string", "maxLength": 200, "pattern": "^[a-zA-Z0-9_:.-]+$" },
+        "title": { "type": "string", "maxLength": 250 },
+        "namespace": { "type": "string", "maxLength": 50 },
+        "content": { "type": "string", "maxLength": 500000 },
+        "summary": { "type": "string", "maxLength": 500 },
+        "author": { "type": "string", "maxLength": 100 },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "revisionCount": { "type": "number" },
+        "latestRevisionId": { "type": "string", "maxLength": 128 },
+        "categories": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["slug", "title", "content", "author"]
+    },
+    "Revision": {
+      "title": "Revision",
+      "description": "An immutable historical revision of a wiki page, mirroring MediaWiki revision table",
+      "type": "object",
+      "properties": {
+        "revId": { "type": "string", "maxLength": 128 },
+        "pageId": { "type": "string", "maxLength": 200 },
+        "pageTitle": { "type": "string", "maxLength": 250 },
+        "content": { "type": "string", "maxLength": 500000 },
+        "summary": { "type": "string", "maxLength": 500 },
+        "timestamp": { "type": "string" },
+        "author": { "type": "string", "maxLength": 100 },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "byteSize": { "type": "number" },
+        "minorEdit": { "type": "boolean" }
+      },
+      "required": ["revId", "pageId", "pageTitle", "content", "author", "timestamp"]
+    },
+    "RecentChange": {
+      "title": "RecentChange",
+      "description": "Activity log entry mirroring MediaWiki recentchanges table",
+      "type": "object",
+      "properties": {
+        "pageId": { "type": "string", "maxLength": 200 },
+        "pageTitle": { "type": "string", "maxLength": 250 },
+        "author": { "type": "string", "maxLength": 100 },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "summary": { "type": "string", "maxLength": 500 },
+        "timestamp": { "type": "string" },
+        "oldLen": { "type": "number" },
+        "newLen": { "type": "number" },
+        "revId": { "type": "string", "maxLength": 128 },
+        "minorEdit": { "type": "boolean" }
+      },
+      "required": ["pageId", "pageTitle", "author", "timestamp"]
+    },
+    "TalkComment": {
+      "title": "TalkComment",
+      "description": "Discussion topic or comment for a wiki page",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "pageId": { "type": "string", "maxLength": 200 },
+        "topicTitle": { "type": "string", "maxLength": 250 },
+        "content": { "type": "string", "maxLength": 50000 },
+        "author": { "type": "string", "maxLength": 100 },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["pageId", "topicTitle", "content", "author", "timestamp"]
+    },
+    "WikiSettings": {
+      "title": "WikiSettings",
+      "description": "Global wiki configuration mirroring LocalSettings.php",
+      "type": "object",
+      "properties": {
+        "sitename": { "type": "string", "maxLength": 100 },
+        "languageCode": { "type": "string", "maxLength": 10 },
+        "allowAnonymousEditing": { "type": "boolean" },
+        "enableLivePreview": { "type": "boolean" },
+        "defaultSkin": { "type": "string", "maxLength": 50 },
+        "maxRecentChanges": { "type": "number" },
+        "repositoryUrl": { "type": "string", "maxLength": 250 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["sitename", "languageCode"]
+    }
+  },
+  "firestore": {
+    "/wiki_pages/{pageId}": {
+      "schema": { "$ref": "#/entities/WikiPage" },
+      "description": "Stores individual wiki pages accessible by slug identifier"
+    },
+    "/wiki_pages/{pageId}/revisions/{revId}": {
+      "schema": { "$ref": "#/entities/Revision" },
+      "description": "Subcollection holding revision history for a page"
+    },
+    "/wiki_pages/{pageId}/talks/{talkId}": {
+      "schema": { "$ref": "#/entities/TalkComment" },
+      "description": "Subcollection holding discussion threads for a page"
+    },
+    "/recent_changes/{changeId}": {
+      "schema": { "$ref": "#/entities/RecentChange" },
+      "description": "Chronological stream of all edits mirroring MediaWiki Special:RecentChanges"
+    },
+    "/wiki_settings/{settingId}": {
+      "schema": { "$ref": "#/entities/WikiSettings" },
+      "description": "Global wiki configuration settings synchronized in real time"
+    }
+  }
+}

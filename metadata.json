@@ -1,0 +1,6 @@
+{
+  "name": "MediaWiki TS",
+  "description": "Uma reimplementação moderna e fiel do MediaWiki em TypeScript e React, adaptando a arquitetura clássica PHP/SQL para Firebase Firestore com suporte completo à sintaxe wikitexto, histórico de edições, páginas especiais e conteúdo do repositório oficial da Wikimedia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

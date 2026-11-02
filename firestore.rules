@@ -1,0 +1,87 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.size() > 0;
+    }
+
+    function isValidPage(data) {
+      return data.slug is string && data.slug.size() <= 200
+        && data.title is string && data.title.size() <= 250
+        && data.content is string && data.content.size() <= 500000
+        && data.author is string && data.author.size() <= 100;
+    }
+
+    function isValidRevision(data) {
+      return data.revId is string && data.revId.size() <= 128
+        && data.pageId is string && data.pageId.size() <= 200
+        && data.pageTitle is string && data.pageTitle.size() <= 250
+        && data.content is string && data.content.size() <= 500000
+        && data.author is string && data.author.size() <= 100;
+    }
+
+    function isValidRecentChange(data) {
+      return data.pageId is string && data.pageId.size() <= 200
+        && data.pageTitle is string && data.pageTitle.size() <= 250
+        && data.author is string && data.author.size() <= 100;
+    }
+
+    function isValidTalk(data) {
+      return data.pageId is string && data.pageId.size() <= 200
+        && data.topicTitle is string && data.topicTitle.size() <= 250
+        && data.content is string && data.content.size() <= 50000
+        && data.author is string && data.author.size() <= 100;
+    }
+
+    function isValidSettings(data) {
+      return data.sitename is string && data.sitename.size() <= 100
+        && data.languageCode is string && data.languageCode.size() <= 10;
+    }
+
+    // Wiki Pages collection
+    match /wiki_pages/{pageId} {
+      allow read: if true;
+      allow create: if isValidPage(request.resource.data);
+      allow update: if isValidPage(request.resource.data);
+      allow delete: if request.auth != null;
+
+      // Revisions subcollection (immutable)
+      match /revisions/{revId} {
+        allow read: if true;
+        allow create: if isValidRevision(request.resource.data);
+        allow update: if false; // Revisions are immutable in MediaWiki
+        allow delete: if request.auth != null;
+      }
+
+      // Talks subcollection (discussion comments)
+      match /talks/{talkId} {
+        allow read: if true;
+        allow create: if isValidTalk(request.resource.data);
+        allow update: if isValidTalk(request.resource.data);
+        allow delete: if request.auth != null;
+      }
+    }
+
+    // Recent changes log
+    match /recent_changes/{changeId} {
+      allow read: if true;
+      allow create: if isValidRecentChange(request.resource.data);
+      allow update: if false; // Recent change log is append-only
+      allow delete: if request.auth != null;
+    }
+
+    // Wiki settings configuration
+    match /wiki_settings/{settingId} {
+      allow read: if true;
+      allow create, update: if isValidSettings(request.resource.data);
+      allow delete: if request.auth != null;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

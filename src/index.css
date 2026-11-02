@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #202122;
+    background-color: #ffffff;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .dark body {
+    color: #eaecf0;
+    background-color: #1a1f2c;
+  }
+
+  h1, h2, h3, h4, .font-serif {
+    font-family: 'Linux Libertine', 'Georgia', 'Times', serif;
+  }
+}
+
+/* MediaWiki Typography & Elements */
+.mw-body-content p {
+  margin-top: 0.6em;
+  margin-bottom: 0.6em;
+  line-height: 1.65;
+}
+
+.mw-headline {
+  scroll-margin-top: 4.5rem;
+}
+
+/* Wikitable formatting */
+table.wikitable {
+  background-color: #f8f9fa;
+  color: #202122;
+  margin: 1em 0;
+  border: 1px solid #a2a9b1;
+  border-collapse: collapse;
+}
+
+table.wikitable > tr > th,
+table.wikitable > * > tr > th {
+  background-color: #eaecf0;
+  text-align: left;
+  padding: 0.4em 0.6em;
+  border: 1px solid #a2a9b1;
+}
+
+table.wikitable > tr > td,
+table.wikitable > * > tr > td {
+  padding: 0.4em 0.6em;
+  border: 1px solid #a2a9b1;
+}
+
+.dark table.wikitable {
+  background-color: #131722;
+  color: #eaecf0;
+  border-color: #374151;
+}
+
+.dark table.wikitable > tr > th,
+.dark table.wikitable > * > tr > th {
+  background-color: #1f2937;
+  border-color: #374151;
+  color: #f3f4f6;
+}
+
+.dark table.wikitable > tr > td,
+.dark table.wikitable > * > tr > td {
+  border-color: #374151;
+}
+
+/* MediaWiki Links */
+a.mw-wiki-link {
+  color: #0645ad;
+  text-decoration: none;
+}
+a.mw-wiki-link:hover {
+  text-decoration: underline;
+}
+
+a.mw-new-link {
+  color: #ba0000;
+  text-decoration: none;
+}
+a.mw-new-link:hover {
+  text-decoration: underline;
+}
+
+.dark a.mw-wiki-link {
+  color: #6ba4ff;
+}
+
+.dark a.mw-new-link {
+  color: #ff7878;
+}
+
+/* Print styles for MediaWiki */
+@media print {
+  header, aside, .toc, .mw-section-edit, button {
+    display: none !important;
+  }
+  main {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+}
