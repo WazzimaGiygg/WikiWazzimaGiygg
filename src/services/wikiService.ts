@@ -22,7 +22,7 @@ const WIKI_SETTINGS_COLLECTION = 'wiki_settings';
 
 let isSeeding = false;
 
-// Ensure initial pages exist in Firestore
+// Ensure initial pages exist in Firestore if database is fresh
 export async function seedInitialPagesIfNeeded(): Promise<void> {
   if (isSeeding) return;
   isSeeding = true;
@@ -31,11 +31,10 @@ export async function seedInitialPagesIfNeeded(): Promise<void> {
     const snap = await getDoc(mainDocRef);
 
     if (!snap.exists()) {
-      console.log('Seeding initial MediaWiki articles to Firestore...');
+      console.log('Seeding initial WikiWazzimaGiygg articles into Firestore...');
       for (const [slug, page] of Object.entries(INITIAL_PAGES)) {
         await setDoc(doc(db, WIKI_PAGES_COLLECTION, slug), page);
 
-        // Add initial revision
         const revRef = doc(db, `${WIKI_PAGES_COLLECTION}/${slug}/revisions`, page.latestRevisionId);
         await setDoc(revRef, {
           revId: page.latestRevisionId,
@@ -50,7 +49,6 @@ export async function seedInitialPagesIfNeeded(): Promise<void> {
           minorEdit: false,
         });
 
-        // Add initial recent change
         await addDoc(collection(db, RECENT_CHANGES_COLLECTION), {
           pageId: slug,
           pageTitle: page.title,
@@ -66,13 +64,13 @@ export async function seedInitialPagesIfNeeded(): Promise<void> {
       }
     }
   } catch (error) {
-    console.warn('Could not seed to Firestore (may be offline or restricted). Fallbacks active.', error);
+    console.warn('Could not seed initial pages to Firestore:', error);
   } finally {
     isSeeding = false;
   }
 }
 
-// 1. REAL-TIME PAGE SUBSCRIPTION
+// 1. REAL-TIME PAGE SUBSCRIPTION - STRICTLY FROM FIRESTORE
 export function subscribeToPage(
   rawSlug: string,
   callback: (page: WikiPage | null) => void
@@ -86,24 +84,19 @@ export function subscribeToPage(
     snapshot => {
       if (snapshot.exists()) {
         callback(snapshot.data() as WikiPage);
-      } else if (INITIAL_PAGES[slug]) {
-        callback(INITIAL_PAGES[slug]);
       } else {
+        // Only return data if it actually exists in Firestore
         callback(null);
       }
     },
     error => {
-      console.warn(`Firestore onSnapshot error for page ${slug}, using fallback:`, error);
-      if (INITIAL_PAGES[slug]) {
-        callback(INITIAL_PAGES[slug]);
-      } else {
-        callback(null);
-      }
+      console.warn(`Firestore onSnapshot error for page ${slug}:`, error);
+      callback(null);
     }
   );
 }
 
-// 2. REAL-TIME ALL PAGES SUBSCRIPTION
+// 2. REAL-TIME ALL PAGES SUBSCRIPTION - STRICTLY FROM FIRESTORE
 export function subscribeToAllPages(
   callback: (pages: WikiPage[]) => void
 ): Unsubscribe {
@@ -114,33 +107,20 @@ export function subscribeToAllPages(
     colRef,
     snapshot => {
       const pages: WikiPage[] = [];
-      const seen = new Set<string>();
-
       snapshot.docs.forEach(docSnap => {
-        const page = docSnap.data() as WikiPage;
-        pages.push(page);
-        seen.add(page.slug);
+        pages.push(docSnap.data() as WikiPage);
       });
-
-      // Merge any local initial pages not yet in Firestore
-      for (const [slug, p] of Object.entries(INITIAL_PAGES)) {
-        if (!seen.has(slug)) {
-          pages.push(p);
-        }
-      }
-
       pages.sort((a, b) => a.title.localeCompare(b.title));
       callback(pages);
     },
     error => {
       console.warn('Firestore onSnapshot error for all pages:', error);
-      const fallbackList = Object.values(INITIAL_PAGES).sort((a, b) => a.title.localeCompare(b.title));
-      callback(fallbackList);
+      callback([]);
     }
   );
 }
 
-// 3. REAL-TIME REVISIONS SUBSCRIPTION
+// 3. REAL-TIME REVISIONS SUBSCRIPTION - STRICTLY FROM FIRESTORE
 export function subscribeToPageRevisions(
   rawSlug: string,
   callback: (revisions: PageRevision[]) => void
@@ -155,52 +135,18 @@ export function subscribeToPageRevisions(
     snapshot => {
       if (!snapshot.empty) {
         callback(snapshot.docs.map(d => d.data() as PageRevision));
-      } else if (INITIAL_PAGES[slug]) {
-        const fallback = INITIAL_PAGES[slug];
-        callback([
-          {
-            revId: fallback.latestRevisionId,
-            pageId: slug,
-            pageTitle: fallback.title,
-            content: fallback.content,
-            summary: fallback.summary,
-            timestamp: fallback.updatedAt,
-            author: fallback.author,
-            authorId: fallback.authorId,
-            byteSize: new Blob([fallback.content]).size,
-            minorEdit: false,
-          },
-        ]);
       } else {
         callback([]);
       }
     },
     error => {
       console.warn(`Firestore onSnapshot error for revisions of ${slug}:`, error);
-      if (INITIAL_PAGES[slug]) {
-        const fallback = INITIAL_PAGES[slug];
-        callback([
-          {
-            revId: fallback.latestRevisionId,
-            pageId: slug,
-            pageTitle: fallback.title,
-            content: fallback.content,
-            summary: fallback.summary,
-            timestamp: fallback.updatedAt,
-            author: fallback.author,
-            authorId: fallback.authorId,
-            byteSize: new Blob([fallback.content]).size,
-            minorEdit: false,
-          },
-        ]);
-      } else {
-        callback([]);
-      }
+      callback([]);
     }
   );
 }
 
-// 4. REAL-TIME RECENT CHANGES SUBSCRIPTION
+// 4. REAL-TIME RECENT CHANGES SUBSCRIPTION - STRICTLY FROM FIRESTORE
 export function subscribeToRecentChanges(
   callback: (changes: RecentChange[]) => void,
   maxCount = 50
@@ -216,42 +162,17 @@ export function subscribeToRecentChanges(
         const changes = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as RecentChange));
         callback(changes);
       } else {
-        // Fallback to initial pages
-        const fallbackChanges = Object.values(INITIAL_PAGES).map(p => ({
-          pageId: p.slug,
-          pageTitle: p.title,
-          author: p.author,
-          authorId: p.authorId,
-          summary: p.summary,
-          timestamp: p.updatedAt,
-          oldLen: 0,
-          newLen: new Blob([p.content]).size,
-          revId: p.latestRevisionId,
-          minorEdit: false,
-        }));
-        callback(fallbackChanges);
+        callback([]);
       }
     },
     error => {
       console.warn('Firestore onSnapshot error for recent changes:', error);
-      const fallbackChanges = Object.values(INITIAL_PAGES).map(p => ({
-        pageId: p.slug,
-        pageTitle: p.title,
-        author: p.author,
-        authorId: p.authorId,
-        summary: p.summary,
-        timestamp: p.updatedAt,
-        oldLen: 0,
-        newLen: new Blob([p.content]).size,
-        revId: p.latestRevisionId,
-        minorEdit: false,
-      }));
-      callback(fallbackChanges);
+      callback([]);
     }
   );
 }
 
-// 5. REAL-TIME TALK TOPICS SUBSCRIPTION
+// 5. REAL-TIME TALK TOPICS SUBSCRIPTION - STRICTLY FROM FIRESTORE
 export function subscribeToPageTalks(
   rawSlug: string,
   callback: (talks: TalkComment[]) => void
@@ -267,17 +188,7 @@ export function subscribeToPageTalks(
       if (!snapshot.empty) {
         callback(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as TalkComment)));
       } else {
-        // Default initial welcome comment
-        callback([
-          {
-            id: 'talk_initial',
-            pageId: slug,
-            topicTitle: 'Boas-vindas à discussão',
-            content: `Página de discussão conectada em tempo real com o Firestore. Assine suas mensagens com \`--~~~~\`.`,
-            author: 'Sistema MediaWiki TS',
-            timestamp: new Date().toISOString(),
-          },
-        ]);
+        callback([]);
       }
     },
     error => {
@@ -312,7 +223,7 @@ export async function addTalkComment(params: {
   }
 }
 
-// 6. REAL-TIME SETTINGS SUBSCRIPTION
+// 6. REAL-TIME SETTINGS SUBSCRIPTION - STRICTLY FROM FIRESTORE
 export function subscribeToWikiSettings(
   callback: (settings: WikiSettings) => void
 ): Unsubscribe {
@@ -344,7 +255,7 @@ export async function saveWikiSettingsToFirestore(settings: WikiSettings): Promi
   }
 }
 
-// One-shot functions
+// One-shot functions strictly querying Firestore
 export async function getPage(rawSlug: string): Promise<WikiPage | null> {
   const slug = slugify(rawSlug);
   try {
@@ -355,13 +266,10 @@ export async function getPage(rawSlug: string): Promise<WikiPage | null> {
       return snap.data() as WikiPage;
     }
   } catch (error) {
-    console.warn(`Firestore getPage error for ${slug}, checking fallback seed:`, error);
+    console.warn(`Firestore getPage error for ${slug}:`, error);
   }
 
-  if (INITIAL_PAGES[slug]) {
-    return INITIAL_PAGES[slug];
-  }
-
+  // Strictly return null if not in Firestore
   return null;
 }
 
@@ -404,10 +312,7 @@ export async function savePage(params: {
       oldLen = new Blob([existingPage.content]).size;
     }
   } catch {
-    if (INITIAL_PAGES[slug]) {
-      existingPage = INITIAL_PAGES[slug];
-      oldLen = new Blob([existingPage.content]).size;
-    }
+    // If not found in Firestore, existingPage is null
   }
 
   const updatedPage: WikiPage = {
@@ -476,24 +381,6 @@ export async function getPageRevisions(rawSlug: string): Promise<PageRevision[]>
     console.warn(`Could not get revisions from Firestore for ${slug}:`, error);
   }
 
-  const fallback = INITIAL_PAGES[slug];
-  if (fallback) {
-    return [
-      {
-        revId: fallback.latestRevisionId,
-        pageId: slug,
-        pageTitle: fallback.title,
-        content: fallback.content,
-        summary: fallback.summary,
-        timestamp: fallback.updatedAt,
-        author: fallback.author,
-        authorId: fallback.authorId,
-        byteSize: new Blob([fallback.content]).size,
-        minorEdit: false,
-      },
-    ];
-  }
-
   return [];
 }
 
@@ -510,23 +397,11 @@ export async function getRecentChangesList(maxCount = 50): Promise<RecentChange[
     console.warn('Could not fetch recent changes from Firestore:', error);
   }
 
-  return Object.values(INITIAL_PAGES).map(p => ({
-    pageId: p.slug,
-    pageTitle: p.title,
-    author: p.author,
-    authorId: p.authorId,
-    summary: p.summary,
-    timestamp: p.updatedAt,
-    oldLen: 0,
-    newLen: new Blob([p.content]).size,
-    revId: p.latestRevisionId,
-    minorEdit: false,
-  }));
+  return [];
 }
 
 export async function getAllPagesList(namespaceFilter?: PageNamespace): Promise<WikiPage[]> {
   const pages: WikiPage[] = [];
-  const slugsSeen = new Set<string>();
 
   try {
     const snap = await getDocs(collection(db, WIKI_PAGES_COLLECTION));
@@ -534,19 +409,10 @@ export async function getAllPagesList(namespaceFilter?: PageNamespace): Promise<
       const page = d.data() as WikiPage;
       if (!namespaceFilter || page.namespace === namespaceFilter) {
         pages.push(page);
-        slugsSeen.add(page.slug);
       }
     });
   } catch (error) {
-    console.warn('Could not fetch all pages from Firestore, using initial pages:', error);
-  }
-
-  for (const [slug, p] of Object.entries(INITIAL_PAGES)) {
-    if (!slugsSeen.has(slug)) {
-      if (!namespaceFilter || p.namespace === namespaceFilter) {
-        pages.push(p);
-      }
-    }
+    console.warn('Could not fetch all pages from Firestore:', error);
   }
 
   return pages.sort((a, b) => a.title.localeCompare(b.title));

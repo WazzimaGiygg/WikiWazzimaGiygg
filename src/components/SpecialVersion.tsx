@@ -18,11 +18,11 @@ export const SpecialVersion: React.FC = () => {
           <span>Versão do sistema</span>
         </h1>
         <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-          Informações técnicas sobre o MediaWiki TS, o ambiente de execução e a sincronização com o repositório oficial.
+          Informações técnicas sobre o WikiWazzimaGiygg e o ambiente de execução Firestore.
         </div>
       </div>
 
-      {/* MediaWiki Software Info Table */}
+      {/* Software Info Table */}
       <div className="space-y-6 text-xs">
         <div>
           <h2 className="font-serif font-bold text-sm text-gray-900 dark:text-gray-100 pb-1 mb-2 border-b border-gray-200 dark:border-gray-800">
@@ -41,11 +41,11 @@ export const SpecialVersion: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                 <tr>
-                  <td className="p-2 font-bold text-blue-600">MediaWiki TS</td>
-                  <td className="p-2 font-mono">1.43.0-ts</td>
+                  <td className="p-2 font-bold text-blue-600">WikiWazzimaGiygg</td>
+                  <td className="p-2 font-mono">1.0.0-ts</td>
                   <td className="p-2">GPL-2.0-or-later</td>
                   <td className="p-2 text-gray-600 dark:text-gray-400">
-                    Port do MediaWiki PHP para TypeScript e Google Cloud Firestore
+                    Engine Wiki em TypeScript e Google Cloud Firestore
                   </td>
                 </tr>
                 <tr>
@@ -59,7 +59,7 @@ export const SpecialVersion: React.FC = () => {
                       rel="noopener noreferrer"
                       className="text-blue-600 hover:underline flex items-center gap-1"
                     >
-                      <span>wikimedia/mediawiki no GitHub</span>
+                      <span>Repositório GitHub</span>
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </td>
@@ -69,15 +69,15 @@ export const SpecialVersion: React.FC = () => {
                   <td className="p-2 font-mono">TypeScript 5.8+ / Node.js</td>
                   <td className="p-2">Apache-2.0</td>
                   <td className="p-2 text-gray-600 dark:text-gray-400">
-                    Tipagem estática rigorosa substituindo a base clássica PHP
+                    Tipagem estática rigorosa com suporte reativo em tempo real
                   </td>
                 </tr>
                 <tr>
                   <td className="p-2 font-medium">Banco de Dados</td>
                   <td className="p-2 font-mono">Google Cloud Firestore</td>
-                  <td className="p-2">Proprietary Cloud</td>
+                  <td className="p-2">Cloud Firestore</td>
                   <td className="p-2 text-gray-600 dark:text-gray-400">
-                    Armazenamento NoSQL em tempo real substituindo MySQL / MariaDB
+                    Armazenamento NoSQL e listeners onSnapshot em tempo real
                   </td>
                 </tr>
                 <tr>
@@ -85,7 +85,7 @@ export const SpecialVersion: React.FC = () => {
                   <td className="p-2 font-mono">React 19 + Vector Skin</td>
                   <td className="p-2">MIT / GPL</td>
                   <td className="p-2 text-gray-600 dark:text-gray-400">
-                    Reativação do Vector moderno (2022) e Vector clássico (2010)
+                    Temas Vector Moderno (2022), Vector Clássico (2010) e Modo Escuro
                   </td>
                 </tr>
               </tbody>
@@ -131,10 +131,10 @@ export const SpecialVersion: React.FC = () => {
                   </td>
                 </tr>
                 <tr>
-                  <td className="p-2 font-medium text-blue-600">Wikimedia GitHub Bridge</td>
+                  <td className="p-2 font-medium text-blue-600">GitHub Bridge</td>
                   <td className="p-2 font-mono text-[11px]">ApiConnector</td>
                   <td className="p-2 text-gray-600 dark:text-gray-400">
-                    Sincronização em tempo real de commits e metadados com github.com/wikimedia/mediawiki
+                    Sincronização de commits e documentação com o repositório git upstream
                   </td>
                 </tr>
                 <tr>
@@ -154,7 +154,7 @@ export const SpecialVersion: React.FC = () => {
           <div className="p-4 bg-white dark:bg-gray-900 border border-blue-200 dark:border-blue-900 rounded shadow-xs">
             <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-2">
               <GitBranch className="w-4 h-4 text-blue-600" />
-              <span>Metadados do Repositório Oficial no GitHub</span>
+              <span>Metadados do Repositório Git Conectado</span>
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-3">{repoInfo.description}</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">

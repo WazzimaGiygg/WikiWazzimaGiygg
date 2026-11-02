@@ -137,7 +137,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({ page, slug, onBackToAr
           </div>
         </h1>
         <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-          No MediaWiki TS, cada edição cria uma revisão imutável com carimbo de data/hora e identificador único de autor no Firestore.
+          No WikiWazzimaGiygg, cada edição cria uma revisão imutável com carimbo de data/hora e identificador único de autor no Firestore.
         </div>
       </div>
 

@@ -68,7 +68,7 @@ export const SpecialAllPages: React.FC = () => {
           </div>
         </h1>
         <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-          Índice alfabético completo de todos os artigos do MediaWiki TS conectado reativamente ao Firestore.
+          Índice alfabético completo de todos os artigos do WikiWazzimaGiygg conectado reativamente ao Firestore.
         </div>
       </div>
 

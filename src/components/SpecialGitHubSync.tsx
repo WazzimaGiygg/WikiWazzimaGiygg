@@ -69,9 +69,8 @@ export const SpecialGitHubSync: React.FC = () => {
         .join('\n');
 
       const wikitext = `{{Infobox software
-| nome = Repositório wikimedia/mediawiki
+| nome = Repositório Upstream MediaWiki
 | url = ${repoInfo.html_url}
-| proprietário = Wikimedia Foundation
 | estrelas = ${repoInfo.stargazers_count}
 | forks = ${repoInfo.forks_count}
 | issues = ${repoInfo.open_issues_count}
@@ -80,7 +79,7 @@ export const SpecialGitHubSync: React.FC = () => {
 | sincronizado_em = ${new Date().toLocaleString('pt-BR')}
 }}
 
-Este artigo reúne informações sincronizadas em tempo real a partir do repositório oficial do MediaWiki no GitHub: '''[${repoInfo.html_url} wikimedia/mediawiki]'''.
+Este artigo reúne informações sincronizadas em tempo real a partir do repositório upstream no GitHub: '''[${repoInfo.html_url} wikimedia/mediawiki]'''.
 
 == Descrição Oficial ==
 ${repoInfo.description}
@@ -95,18 +94,16 @@ ${repoInfo.description}
 == Commits Recentes no Upstream ==
 ${commitListWikitext}
 
-== README.md Oficial do MediaWiki ==
+== README.md do Repositório ==
 <syntaxhighlight lang="markdown">
 ${readme.slice(0, 2000)}
 </syntaxhighlight>
 
-== Comparativo com a Versão TypeScript ==
-No MediaWiki TS, as rotinas em PHP de \`includes/actions\` e \`includes/storage\` foram convertidas em módulos tipados com TypeScript e banco de dados Google Cloud Firestore. Consulte [[Arquitetura_MediaWiki_TS]] para mais detalhes.
+== Comparativo com o WikiWazzimaGiygg ==
+No WikiWazzimaGiygg, a engine foi portada para TypeScript e Google Cloud Firestore. Consulte [[Arquitetura_WikiWazzimaGiygg]] para mais detalhes.
 
 [[Categoria:Git]]
-[[Categoria:Código Fonte]]
-[[Categoria:Wikimedia]]
-[[Categoria:MediaWiki]]`;
+[[Categoria:Código Fonte]]`;
 
       await savePage({
         slug: 'Repositório_GitHub_Wikimedia',
@@ -245,7 +242,7 @@ No MediaWiki TS, as rotinas em PHP de \`includes/actions\` e \`includes/storage\
           <div>
             <h2 className="font-serif font-bold text-sm text-gray-900 dark:text-gray-100 pb-1 mb-2 border-b border-gray-200 dark:border-gray-800 flex items-center gap-1.5">
               <GitCommit className="w-4 h-4 text-blue-600" />
-              <span>Commits Recentes da Equipe Wikimedia Foundation</span>
+              <span>Commits Recentes do Repositório Upstream</span>
             </h2>
 
             <div className="border border-[#a2a9b1] dark:border-gray-700 rounded bg-[#f8f9fa] dark:bg-gray-900 overflow-hidden">

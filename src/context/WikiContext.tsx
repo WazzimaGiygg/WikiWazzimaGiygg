@@ -31,7 +31,7 @@ interface WikiContextType {
 }
 
 const DEFAULT_SETTINGS: WikiSettings = {
-  sitename: 'MediaWiki TS',
+  sitename: 'WikiWazzimaGiygg',
   languageCode: 'pt-br',
   allowAnonymousEditing: true,
   enableLivePreview: true,
@@ -55,7 +55,14 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
 
   const [settings, setSettings] = useState<WikiSettings>(() => {
     const saved = localStorage.getItem('mw_settings');
-    return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.sitename === 'MediaWiki TS') {
+        parsed.sitename = 'WikiWazzimaGiygg';
+      }
+      return { ...DEFAULT_SETTINGS, ...parsed };
+    }
+    return DEFAULT_SETTINGS;
   });
 
   const [guestName, setGuestName] = useState<string>(() => {

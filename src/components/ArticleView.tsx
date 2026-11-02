@@ -107,7 +107,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
             <div>
-              <p className="font-semibold text-base mb-1">O MediaWiki TS não possui uma página com este nome exato.</p>
+              <p className="font-semibold text-base mb-1">O WikiWazzimaGiygg não possui esta página salva no Firebase.</p>
               <p className="text-xs text-amber-800 dark:text-amber-300 mb-3">
                 Você pode criar este artigo agora mesmo utilizando a sintaxe de wikitexto. As alterações serão salvas diretamente no Firebase Firestore.
               </p>
@@ -217,7 +217,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
           {page.title}
         </h1>
         <div id="siteSub" className="text-[11px] text-gray-500 dark:text-gray-400 font-sans italic">
-          De MediaWiki TS, o motor de conhecimento livre adaptado para TypeScript & Firebase.
+          De WikiWazzimaGiygg, a enciclopédia livre adaptada para TypeScript & Firebase.
         </div>
       </div>
 

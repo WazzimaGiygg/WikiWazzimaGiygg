@@ -11,7 +11,6 @@ import {
   Database,
   ExternalLink,
   Code2,
-  Heart,
   Share2,
   List,
   Info,
@@ -24,7 +23,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
-  const { currentSlug, navigateToPage, sidebarOpen, setSidebarOpen } = useWiki();
+  const { currentSlug, navigateToPage, sidebarOpen, setSidebarOpen, settings } = useWiki();
 
   const handleRandomPage = async () => {
     const slug = await getRandomPageSlug();
@@ -40,15 +39,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
   ];
 
   const archLinks = [
-    { label: 'Artigo MediaWiki', slug: 'MediaWiki', icon: FileText },
-    { label: 'Arquitetura TS & NoSQL', slug: 'Arquitetura_MediaWiki_TS', icon: Layers },
+    { label: 'Página Principal', slug: 'Página_principal', icon: FileText },
+    { label: 'Arquitetura do Sistema', slug: 'Arquitetura_WikiWazzimaGiygg', icon: Layers },
     { label: 'Manual: LocalSettings.ts', slug: 'Manual:LocalSettings.ts', icon: Settings },
-    { label: 'Wikimedia Foundation', slug: 'Wikimedia_Foundation', icon: Heart },
   ];
 
   const repoLinks = [
-    { label: 'Informações do Repo', slug: 'Repositório_GitHub_Wikimedia', icon: GitBranch },
-    { label: 'Sincronizar GitHub API', slug: 'Especial:GitHubSync', icon: Database },
+    { label: 'Sincronizar Repositório', slug: 'Especial:GitHubSync', icon: Database },
   ];
 
   const toolLinks = [
@@ -64,7 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
       }`}
     >
       <div className="p-4 space-y-5 text-xs">
-        {/* MediaWiki Flower Logo */}
+        {/* Brand Logo */}
         <div className="text-center pb-3 border-b border-gray-200 dark:border-gray-800">
           <button
             type="button"
@@ -74,8 +71,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
             <div className="w-16 h-16 rounded-full bg-linear-to-tr from-[#3366cc] via-[#00a2ff] to-[#44cc66] flex items-center justify-center p-2 shadow-sm group-hover:scale-105 transition-transform mb-1">
               <Code2 className="w-9 h-9 text-white stroke-[2.2]" />
             </div>
-            <span className="font-serif font-bold text-base text-gray-900 dark:text-gray-100 tracking-tight">
-              MediaWiki <span className="text-blue-600 dark:text-blue-400 font-sans text-xs">TS</span>
+            <span className="font-serif font-bold text-base text-gray-900 dark:text-gray-100 tracking-tight break-all">
+              {settings.sitename}
             </span>
             <span className="text-[10px] text-gray-500 dark:text-gray-400">Motor de Conhecimento Livre</span>
           </button>
@@ -98,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
                       if (item.action) item.action();
                       else if (item.slug) navigateToPage(item.slug);
                     }}
-                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded transition-colors text-left ${
+                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded transition-colors text-left cursor-pointer ${
                       isActive
                         ? 'bg-[#3366cc]/10 text-[#0645ad] dark:text-[#6ba4ff] font-semibold border-l-3 border-[#3366cc]'
                         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800'
@@ -113,10 +110,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
           </ul>
         </div>
 
-        {/* Section 2: Arquitetura TS */}
+        {/* Section 2: Arquitetura & Sistema */}
         <div>
           <h3 className="font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-[10px] mb-2 px-2">
-            Arquitetura TS
+            Estrutura do Wiki
           </h3>
           <ul className="space-y-0.5">
             {archLinks.map((item, idx) => {
@@ -127,7 +124,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
                   <button
                     type="button"
                     onClick={() => navigateToPage(item.slug)}
-                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded transition-colors text-left ${
+                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded transition-colors text-left cursor-pointer ${
                       isActive
                         ? 'bg-[#3366cc]/10 text-[#0645ad] dark:text-[#6ba4ff] font-semibold border-l-3 border-[#3366cc]'
                         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800'
@@ -142,10 +139,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
           </ul>
         </div>
 
-        {/* Section 3: Repositório GitHub Upstream */}
+        {/* Section 3: Sincronização */}
         <div>
           <h3 className="font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-[10px] mb-2 px-2">
-            GitHub Upstream
+            Sincronização
           </h3>
           <ul className="space-y-0.5">
             {repoLinks.map((item, idx) => {
@@ -156,7 +153,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
                   <button
                     type="button"
                     onClick={() => navigateToPage(item.slug)}
-                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded transition-colors text-left ${
+                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded transition-colors text-left cursor-pointer ${
                       isActive
                         ? 'bg-[#3366cc]/10 text-[#0645ad] dark:text-[#6ba4ff] font-semibold border-l-3 border-[#3366cc]'
                         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800'
@@ -168,20 +165,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
                 </li>
               );
             })}
-            <li>
-              <a
-                href="https://github.com/wikimedia/mediawiki"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded text-gray-600 dark:text-gray-400 hover:bg-gray-200/60 dark:hover:bg-gray-800"
-              >
-                <span className="flex items-center gap-2">
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>wikimedia/mediawiki</span>
-                </span>
-                <span className="text-[10px] bg-gray-200 dark:bg-gray-700 px-1.5 py-0.2 rounded font-mono">↗</span>
-              </a>
-            </li>
           </ul>
         </div>
 
@@ -202,7 +185,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
                       if (item.action) item.action();
                       else if (item.slug) navigateToPage(item.slug);
                     }}
-                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded transition-colors text-left ${
+                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded transition-colors text-left cursor-pointer ${
                       isActive
                         ? 'bg-[#3366cc]/10 text-[#0645ad] dark:text-[#6ba4ff] font-semibold border-l-3 border-[#3366cc]'
                         : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800'
@@ -223,7 +206,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
             <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
             <span>Firestore Conectado</span>
           </div>
-          <div>Versão 1.43.0-ts (PHP → TS)</div>
+          <div>WikiWazzimaGiygg TS</div>
           <div>GNU GPL v2.0+</div>
         </div>
       </div>

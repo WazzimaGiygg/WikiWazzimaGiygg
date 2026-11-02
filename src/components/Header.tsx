@@ -130,7 +130,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               onFocus={() => searchQuery.trim() && setShowSearchDropdown(true)}
-              placeholder="Pesquisar no MediaWiki TS..."
+              placeholder="Pesquisar no WikiWazzimaGiygg..."
               className="w-full pl-8 pr-16 py-1.5 text-xs sm:text-sm bg-[#f8f9fa] dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-[#a2a9b1] dark:border-gray-700 rounded focus:outline-hidden focus:border-[#3366cc] focus:ring-1 focus:ring-[#3366cc]"
             />
             <button
@@ -327,7 +327,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
                   </div>
 
                   <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">
-                    No MediaWiki TS, edições são associadas a este identificador com imutabilidade registrada no Firestore.
+                    No WikiWazzimaGiygg, edições são associadas a este identificador com imutabilidade registrada no Firestore.
                   </div>
                 </div>
 

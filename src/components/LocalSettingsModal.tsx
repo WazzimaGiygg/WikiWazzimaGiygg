@@ -37,7 +37,7 @@ export const LocalSettingsModal: React.FC<LocalSettingsModalProps> = ({ isOpen, 
     }, 600);
   };
 
-  const codeRepresentation = `// LocalSettings.ts - MediaWiki TS Configuration
+  const codeRepresentation = `// LocalSettings.ts - WikiWazzimaGiygg Configuration
 import { WikiSettings } from './types/wiki';
 
 export const config: WikiSettings = {
