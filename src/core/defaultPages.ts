@@ -15,6 +15,7 @@ export const INITIAL_PAGES: Record<string, WikiPage> = {
     summary: 'Criação da Página Principal do WikiWazzimaGiygg',
     content: `{{Infobox software
 | nome = WikiWazzimaGiygg
+| logotipo = /assets/aistudio/image_19fe7a14.png
 | desenvolvedor = Comunidade de Código Aberto
 | versão_estável = 1.0.0-ts
 | linguagem = TypeScript (anteriormente PHP)

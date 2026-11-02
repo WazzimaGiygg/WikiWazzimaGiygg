@@ -68,8 +68,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
             onClick={() => navigateToPage('Página_principal')}
             className="inline-flex flex-col items-center group cursor-pointer"
           >
-            <div className="w-16 h-16 rounded-full bg-linear-to-tr from-[#3366cc] via-[#00a2ff] to-[#44cc66] flex items-center justify-center p-2 shadow-sm group-hover:scale-105 transition-transform mb-1">
-              <Code2 className="w-9 h-9 text-white stroke-[2.2]" />
+            <div className="w-16 h-16 rounded bg-white dark:bg-black p-1 shadow-xs group-hover:scale-105 transition-transform mb-2 border border-gray-300 dark:border-gray-700 flex items-center justify-center">
+              <img
+                src="/assets/aistudio/image_19fe7a14.png"
+                alt="Logo WikiWazzimaGiygg"
+                className="w-full h-full object-contain"
+              />
             </div>
             <span className="font-serif font-bold text-base text-gray-900 dark:text-gray-100 tracking-tight break-all">
               {settings.sitename}

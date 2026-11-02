@@ -102,9 +102,11 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
             onClick={() => navigateToPage('Página_principal')}
             className="flex items-center gap-2 text-left group cursor-pointer"
           >
-            <div className="w-8 h-8 rounded-full bg-linear-to-tr from-[#3366cc] to-[#00a2ff] flex items-center justify-center text-white font-bold text-lg shadow-xs group-hover:scale-105 transition-transform">
-              W
-            </div>
+            <img
+              src="/assets/aistudio/image_19fe7a14.png"
+              alt="Logo WikiWazzimaGiygg"
+              className="w-8 h-8 rounded border border-gray-300 dark:border-gray-700 bg-white shadow-2xs group-hover:scale-105 transition-transform object-contain p-0.5"
+            />
             <div className="hidden sm:block">
               <span className="font-serif font-bold text-lg text-gray-900 dark:text-gray-100 leading-none block">
                 {settings.sitename}

@@ -332,6 +332,7 @@ function parseWikitable(content: string): string {
 function parseInfobox(content: string): string {
   const lines = content.split('\n');
   let title = 'Informações';
+  let imageSrc = '';
   const fields: { key: string; value: string }[] = [];
 
   for (const line of lines) {
@@ -341,8 +342,12 @@ function parseInfobox(content: string): string {
       if (parts.length >= 2) {
         const key = parts[0].trim().replace(/_/g, ' ');
         const value = parts.slice(1).join('=').trim();
-        if (key.toLowerCase() === 'nome' || key.toLowerCase() === 'título' || key.toLowerCase() === 'titulo') {
+        const lowerKey = key.toLowerCase();
+
+        if (lowerKey === 'nome' || lowerKey === 'título' || lowerKey === 'titulo') {
           title = value;
+        } else if (lowerKey === 'logo' || lowerKey === 'logotipo' || lowerKey === 'imagem') {
+          imageSrc = value;
         } else if (value) {
           fields.push({ key: key.charAt(0).toUpperCase() + key.slice(1), value });
         }
@@ -355,6 +360,11 @@ function parseInfobox(content: string): string {
       <div class="bg-[#eaecf0] dark:bg-gray-700 p-2 font-serif font-bold text-center text-sm text-gray-900 dark:text-gray-100 rounded-t mb-2">
         ${escapeHtml(title)}
       </div>
+      ${imageSrc ? `
+        <div class="my-2 p-2 bg-white dark:bg-black rounded border border-gray-200 dark:border-gray-700 flex justify-center">
+          <img src="${escapeHtml(imageSrc)}" alt="${escapeHtml(title)}" class="max-h-28 object-contain" />
+        </div>
+      ` : ''}
       <div class="divide-y divide-gray-200 dark:divide-gray-700">
   `;
 
