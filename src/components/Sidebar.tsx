@@ -16,6 +16,10 @@ import {
   Info,
   ShieldCheck,
   Blocks,
+  Scale,
+  Flag,
+  Unlock,
+  UserSearch,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import { getRandomPageSlug } from '../utils/randomPage';
@@ -205,6 +209,70 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
                 {isBureaucrat && (
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse" />
                 )}
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => navigateToPage('Especial:CheckUser')}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded transition-colors text-left cursor-pointer ${
+                  currentSlug === 'Especial:CheckUser' || currentSlug === 'Special:CheckUser'
+                    ? 'bg-[#3366cc]/10 text-[#0645ad] dark:text-[#6ba4ff] font-semibold border-l-3 border-[#3366cc]'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <UserSearch className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span>Verificação de contas</span>
+                </div>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => navigateToPage('Especial:Discussão_de_desbloqueio')}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded transition-colors text-left cursor-pointer ${
+                  currentSlug === 'Especial:Discussão_de_desbloqueio' || currentSlug === 'Special:Unblock'
+                    ? 'bg-[#3366cc]/10 text-[#0645ad] dark:text-[#6ba4ff] font-semibold border-l-3 border-[#3366cc]'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Unlock className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span>Discussão de desbloqueio</span>
+                </div>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => navigateToPage('Especial:Conselho_de_Arbitragem')}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded transition-colors text-left cursor-pointer ${
+                  currentSlug === 'Especial:Conselho_de_Arbitragem' || currentSlug === 'Special:ArbCom'
+                    ? 'bg-[#3366cc]/10 text-[#0645ad] dark:text-[#6ba4ff] font-semibold border-l-3 border-[#3366cc]'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Scale className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span>Conselho de Arbitragem</span>
+                </div>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => navigateToPage('Especial:Código_de_Conduta')}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded transition-colors text-left cursor-pointer ${
+                  currentSlug === 'Especial:Código_de_Conduta' || currentSlug === 'Special:UCoC'
+                    ? 'bg-[#3366cc]/10 text-[#0645ad] dark:text-[#6ba4ff] font-semibold border-l-3 border-[#3366cc]'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <Flag className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                  <span>Código de Conduta (UCoC)</span>
+                </div>
               </button>
             </li>
           </ul>

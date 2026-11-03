@@ -90,7 +90,49 @@ function WikiMain() {
       currentSlug === 'Special:UserRights' ||
       currentSlug === 'Special:Bureaucrat'
     ) {
-      return <SpecialBureaucratAdmin />;
+      return <SpecialBureaucratAdmin initialTab="manage" />;
+    }
+    if (
+      currentSlug === 'Especial:CheckUser' ||
+      currentSlug === 'Especial:Verificação_de_contas' ||
+      currentSlug === 'Especial:Verificacao_de_contas' ||
+      currentSlug === 'Especial:Fantoches' ||
+      currentSlug === 'Special:CheckUser'
+    ) {
+      return <SpecialBureaucratAdmin initialTab="checkuser" />;
+    }
+    if (
+      currentSlug === 'Especial:Desbloqueio' ||
+      currentSlug === 'Especial:Discussão_de_desbloqueio' ||
+      currentSlug === 'Especial:Discussao_de_desbloqueio' ||
+      currentSlug === 'Especial:Discussão_de_bloqueio' ||
+      currentSlug === 'Especial:Discussao_de_bloqueio' ||
+      currentSlug === 'Special:Unblock'
+    ) {
+      return <SpecialBureaucratAdmin initialTab="unblock" />;
+    }
+    if (
+      currentSlug === 'Especial:ArbCom' ||
+      currentSlug === 'Especial:Conselho_de_Arbitragem' ||
+      currentSlug === 'Special:ArbCom'
+    ) {
+      return <SpecialBureaucratAdmin initialTab="arbcom" />;
+    }
+    if (
+      currentSlug === 'Especial:UCOC' ||
+      currentSlug === 'Especial:UCoC' ||
+      currentSlug === 'Especial:Código_de_Conduta' ||
+      currentSlug === 'Especial:Codigo_de_Conduta' ||
+      currentSlug === 'Special:UCoC'
+    ) {
+      return <SpecialBureaucratAdmin initialTab="ucoc" />;
+    }
+    if (
+      currentSlug === 'Especial:Páginas_protegidas' ||
+      currentSlug === 'Especial:Paginas_protegidas' ||
+      currentSlug === 'Special:ProtectedPages'
+    ) {
+      return <SpecialBureaucratAdmin initialTab="protected_pages" />;
     }
     if (
       currentSlug === 'Especial:Extensões' ||

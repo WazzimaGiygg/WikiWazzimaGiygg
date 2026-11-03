@@ -15,6 +15,9 @@ import {
   ChevronRight,
   Filter,
   Users,
+  Scale,
+  Flag,
+  UserSearch,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import {
@@ -35,6 +38,24 @@ import {
   DEFAULT_SUPER_ADMIN_EMAIL,
 } from '../services/wikiService';
 import { PageProtectionModal } from './PageProtectionModal';
+import { CheckUserPanel } from './admin/CheckUserPanel';
+import { UnblockRequestsPanel } from './admin/UnblockRequestsPanel';
+import { ArbComPanel } from './admin/ArbComPanel';
+import { UCoCPanel } from './admin/UCoCPanel';
+
+export type BureaucratAdminTab =
+  | 'manage'
+  | 'protected_pages'
+  | 'logs'
+  | 'users'
+  | 'checkuser'
+  | 'unblock'
+  | 'arbcom'
+  | 'ucoc';
+
+export interface SpecialBureaucratAdminProps {
+  initialTab?: BureaucratAdminTab;
+}
 
 interface GroupDefinition {
   id: UserGroup;
@@ -103,11 +124,17 @@ const AVAILABLE_GROUPS: GroupDefinition[] = [
   },
 ];
 
-export const SpecialBureaucratAdmin: React.FC = () => {
+export const SpecialBureaucratAdmin: React.FC<SpecialBureaucratAdminProps> = ({ initialTab = 'manage' }) => {
   const { currentUser, isBureaucrat, loginWithGoogle, navigateToPage } = useWiki();
 
   // Active view tab in Bureaucrat portal
-  const [activeTab, setActiveTab] = useState<'manage' | 'protected_pages' | 'logs' | 'users'>('manage');
+  const [activeTab, setActiveTab] = useState<BureaucratAdminTab>(initialTab);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Search & Selected user state
   const [searchTarget, setSearchTarget] = useState<string>('');
@@ -384,24 +411,76 @@ export const SpecialBureaucratAdmin: React.FC = () => {
       )}
 
       {/* Tabs Bar */}
-      <div className="flex border-b border-[#a2a9b1] dark:border-gray-700 mb-4 text-xs">
+      <div className="flex border-b border-[#a2a9b1] dark:border-gray-700 mb-4 text-xs overflow-x-auto no-scrollbar gap-0.5">
         <button
           type="button"
           onClick={() => setActiveTab('manage')}
-          className={`px-4 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors ${
+          className={`px-3.5 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
             activeTab === 'manage'
               ? 'border-purple-600 text-purple-700 dark:text-purple-400 font-semibold bg-purple-50/50 dark:bg-purple-950/20'
               : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
           }`}
         >
           <UserCheck className="w-4 h-4" />
-          <span>Atribuir e Gerenciar Direitos</span>
+          <span>Atribuir Direitos</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('checkuser')}
+          className={`px-3.5 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+            activeTab === 'checkuser'
+              ? 'border-purple-600 text-purple-700 dark:text-purple-400 font-semibold bg-purple-50/50 dark:bg-purple-950/20'
+              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
+        >
+          <UserSearch className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+          <span>Verificação de Contas (Fantoches)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('unblock')}
+          className={`px-3.5 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+            activeTab === 'unblock'
+              ? 'border-purple-600 text-purple-700 dark:text-purple-400 font-semibold bg-purple-50/50 dark:bg-purple-950/20'
+              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
+        >
+          <Unlock className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          <span>Discussão de Desbloqueio</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('arbcom')}
+          className={`px-3.5 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+            activeTab === 'arbcom'
+              ? 'border-purple-600 text-purple-700 dark:text-purple-400 font-semibold bg-purple-50/50 dark:bg-purple-950/20'
+              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
+        >
+          <Scale className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+          <span>Conselho de Arbitragem (ArbCom)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('ucoc')}
+          className={`px-3.5 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+            activeTab === 'ucoc'
+              ? 'border-purple-600 text-purple-700 dark:text-purple-400 font-semibold bg-purple-50/50 dark:bg-purple-950/20'
+              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
+        >
+          <Flag className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+          <span>Código de Conduta (UCoC)</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('protected_pages')}
-          className={`px-4 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors ${
+          className={`px-3.5 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
             activeTab === 'protected_pages'
               ? 'border-purple-600 text-purple-700 dark:text-purple-400 font-semibold bg-purple-50/50 dark:bg-purple-950/20'
               : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
@@ -414,27 +493,27 @@ export const SpecialBureaucratAdmin: React.FC = () => {
         <button
           type="button"
           onClick={() => setActiveTab('logs')}
-          className={`px-4 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors ${
+          className={`px-3.5 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
             activeTab === 'logs'
               ? 'border-purple-600 text-purple-700 dark:text-purple-400 font-semibold bg-purple-50/50 dark:bg-purple-950/20'
               : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
           }`}
         >
           <History className="w-4 h-4" />
-          <span>Registo de privilégios ({logs.length})</span>
+          <span>Registo ({logs.length})</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveTab('users')}
-          className={`px-4 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors ${
+          className={`px-3.5 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
             activeTab === 'users'
               ? 'border-purple-600 text-purple-700 dark:text-purple-400 font-semibold bg-purple-50/50 dark:bg-purple-950/20'
               : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>Diretório de Grupos ({allRights.length})</span>
+          <span>Grupos ({allRights.length})</span>
         </button>
       </div>
 
@@ -1064,6 +1143,18 @@ export const SpecialBureaucratAdmin: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TAB 5: CHECKUSER / FANTOCHES */}
+      {activeTab === 'checkuser' && <CheckUserPanel />}
+
+      {/* TAB 6: UNBLOCK REQUESTS */}
+      {activeTab === 'unblock' && <UnblockRequestsPanel />}
+
+      {/* TAB 7: ARBCOM / CONSELHO DE ARBITRAGEM */}
+      {activeTab === 'arbcom' && <ArbComPanel />}
+
+      {/* TAB 8: UCOC / CÓDIGO UNIVERSAL DE CONDUTA */}
+      {activeTab === 'ucoc' && <UCoCPanel />}
 
       {/* Page Protection Modal */}
       {selectedPageForProtection && (

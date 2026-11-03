@@ -25,6 +25,13 @@ import {
   WikiUser,
   PageProtectionLevel,
   PageProtectionLogEntry,
+  CheckUserCase,
+  UnblockRequest,
+  UnblockVote,
+  UnblockStatus,
+  ArbComCase,
+  UCoCReport,
+  UCoCStatus,
 } from '../types/wiki';
 import { INITIAL_PAGES } from '../core/defaultPages';
 import { slugify } from '../core/parser';
@@ -35,6 +42,10 @@ const WIKI_SETTINGS_COLLECTION = 'wiki_settings';
 const USER_ROLES_COLLECTION = 'user_roles';
 const BUREAUCRAT_LOGS_COLLECTION = 'bureaucrat_logs';
 const PAGE_PROTECTION_LOGS_COLLECTION = 'page_protection_logs';
+const CHECKUSER_COLLECTION = 'checkuser_cases';
+const UNBLOCK_COLLECTION = 'unblock_requests';
+const ARBCOM_COLLECTION = 'arbcom_cases';
+const UCOC_COLLECTION = 'ucoc_reports';
 export const DEFAULT_SUPER_ADMIN_EMAIL = 'pedrohenriquecardonaperes@gmail.com';
 
 let isSeeding = false;
@@ -47,10 +58,12 @@ export async function seedInitialPagesIfNeeded(): Promise<void> {
     const mainDocRef = doc(db, WIKI_PAGES_COLLECTION, 'Página_principal');
     const snap = await getDoc(mainDocRef);
 
-    if (!snap.exists()) {
-      console.log('Seeding initial WikiWazzimaGiygg articles into Firestore...');
-      for (const [slug, page] of Object.entries(INITIAL_PAGES)) {
-        await setDoc(doc(db, WIKI_PAGES_COLLECTION, slug), page);
+    // Seed any missing default policy pages
+    for (const [slug, page] of Object.entries(INITIAL_PAGES)) {
+      const pageRef = doc(db, WIKI_PAGES_COLLECTION, slug);
+      const pageSnap = await getDoc(pageRef);
+      if (!pageSnap.exists()) {
+        await setDoc(pageRef, page);
 
         const revRef = doc(db, `${WIKI_PAGES_COLLECTION}/${slug}/revisions`, page.latestRevisionId);
         await setDoc(revRef, {
@@ -79,24 +92,78 @@ export async function seedInitialPagesIfNeeded(): Promise<void> {
           minorEdit: false,
         });
       }
-    } else {
-      // If Página_principal already exists in Firestore but lacks protectionLevel, initialize it
-      const existingData = snap.data();
-      if (!existingData.protectionLevel) {
-        await setDoc(
-          mainDocRef,
+    }
+
+    // Seed sample CheckUser case if empty
+    const cuSnap = await getDocs(query(collection(db, CHECKUSER_COLLECTION), limit(1)));
+    if (cuSnap.empty) {
+      await addDoc(collection(db, CHECKUSER_COLLECTION), {
+        suspectedMaster: 'EditorAlpha_SP',
+        suspectedPuppets: ['VotanteBeta_99', 'SuporteGama_22'],
+        requestedBy: 'Patrulheiro Comunitário',
+        requestedByUid: 'patrulha_01',
+        reason: 'Edições idênticas com intervalo de 2 minutos em votação deliberativa e guerra de edições coordenada',
+        evidence: 'Difs sincronizados na página principal e padrões idênticos de formatação de tags wikitexto.',
+        status: 'investigando',
+        timestamp: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    // Seed sample Unblock request if empty
+    const unblockSnap = await getDocs(query(collection(db, UNBLOCK_COLLECTION), limit(1)));
+    if (unblockSnap.empty) {
+      await addDoc(collection(db, UNBLOCK_COLLECTION), {
+        userName: 'Colaborador_Iniciante',
+        userUid: 'user_iniciante_test',
+        blockReason: 'Guerra de edições acidental em artigo semi-protegido',
+        appealReason: 'Peço escusas à comunidade pelo mal-entendido. Li atentamente o Código Universal de Conduta e comprometo-me a utilizar a aba de discussão antes de reverter edições.',
+        status: 'em_discussao',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        votes: [
           {
-            protectionLevel: 'locked',
-            isLocked: true,
-            protectionReason: 'Página inicial protegida por alta visibilidade e integridade do portal',
-            protectedBy: 'Administração',
-            protectedByUid: 'system_admin',
-            protectedAt: '2026-11-01T00:00:00.000Z',
-            protectionExpiry: 'infinity',
+            user: 'Editor Sênior',
+            role: 'Editor',
+            vote: 'desbloquear',
+            comment: 'Usuário demonstrou compreensão da política e assumiu compromisso formal.',
+            timestamp: new Date().toISOString(),
           },
-          { merge: true }
-        );
-      }
+        ],
+      });
+    }
+
+    // Seed sample ArbCom case if empty
+    const arbSnap = await getDocs(query(collection(db, ARBCOM_COLLECTION), limit(1)));
+    if (arbSnap.empty) {
+      await addDoc(collection(db, ARBCOM_COLLECTION), {
+        title: 'Conduta e Mediação de Disputa Recorrente em Políticas Editoriais',
+        plaintiff: 'Comissão de Boas Práticas',
+        plaintiffUid: 'boas_praticas_com',
+        respondent: 'EditorContencioso',
+        summary: 'Disputa persistente sobre aplicação de predefinições e reversões sucessivas não resolvidas pela mediação voluntária.',
+        evidence: 'Mais de 15 reversões na última semana e desrespeito à regra de três reversões (R3R).',
+        arbitrators: ['Burocrata Titular', 'Árbitro Comunitário'],
+        status: 'em_deliberacao',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    // Seed sample UCoC report if empty
+    const ucocSnap = await getDocs(query(collection(db, UCOC_COLLECTION), limit(1)));
+    if (ucocSnap.empty) {
+      await addDoc(collection(db, UCOC_COLLECTION), {
+        reportedUser: 'InfratorAnonimo',
+        reporter: 'Membro da Comunidade',
+        reporterUid: 'comunidade_reporter',
+        category: 'assedio_perseguicao',
+        description: 'Usuário enviando mensagens desrespeitosas em páginas de discussão pessoais após divergência em edição.',
+        evidence: 'Difs nas páginas de discussão dos usuários e violação direta da seção 2 do UCoC.',
+        status: 'em_analise',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
     }
   } catch (error) {
     console.warn('Could not seed initial pages to Firestore:', error);
@@ -1081,5 +1148,272 @@ export function subscribeToProtectedPages(
     }
   );
 }
+
+// 9. GOVERNANCE SYSTEMS: CHECKUSER, UNBLOCK DISCUSSIONS, ARBCOM, UCOC
+
+// --- 9.1 CHECKUSER (VERIFICAÇÃO DE FANTOCHES) ---
+
+export function subscribeToCheckUserCases(
+  callback: (cases: CheckUserCase[]) => void
+): Unsubscribe {
+  const colRef = collection(db, CHECKUSER_COLLECTION);
+  const q = query(colRef, orderBy('timestamp', 'desc'), limit(50));
+
+  return onSnapshot(
+    q,
+    snapshot => {
+      const cases: CheckUserCase[] = [];
+      snapshot.forEach(docSnap => {
+        cases.push({ id: docSnap.id, ...docSnap.data() } as CheckUserCase);
+      });
+      callback(cases);
+    },
+    error => {
+      console.warn('Firestore onSnapshot error for checkuser cases:', error);
+      callback([]);
+    }
+  );
+}
+
+export async function createCheckUserCase(
+  data: Omit<CheckUserCase, 'id' | 'timestamp' | 'updatedAt'>
+): Promise<string> {
+  const docRef = await addDoc(collection(db, CHECKUSER_COLLECTION), {
+    ...data,
+    timestamp: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  return docRef.id;
+}
+
+export async function updateCheckUserCase(
+  id: string,
+  updates: Partial<CheckUserCase>
+): Promise<void> {
+  const docRef = doc(db, CHECKUSER_COLLECTION, id);
+  await setDoc(
+    docRef,
+    {
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+}
+
+// --- 9.2 DISCUSSÃO DE DESBLOQUEIO (UNBLOCK REQUESTS) ---
+
+export function subscribeToUnblockRequests(
+  callback: (requests: UnblockRequest[]) => void
+): Unsubscribe {
+  const colRef = collection(db, UNBLOCK_COLLECTION);
+  const q = query(colRef, orderBy('createdAt', 'desc'), limit(50));
+
+  return onSnapshot(
+    q,
+    snapshot => {
+      const requests: UnblockRequest[] = [];
+      snapshot.forEach(docSnap => {
+        requests.push({ id: docSnap.id, ...docSnap.data() } as UnblockRequest);
+      });
+      callback(requests);
+    },
+    error => {
+      console.warn('Firestore onSnapshot error for unblock requests:', error);
+      callback([]);
+    }
+  );
+}
+
+export async function createUnblockRequest(
+  data: Omit<UnblockRequest, 'id' | 'votes' | 'status' | 'createdAt' | 'updatedAt'>
+): Promise<string> {
+  const docRef = await addDoc(collection(db, UNBLOCK_COLLECTION), {
+    ...data,
+    votes: [],
+    status: 'pendente',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  return docRef.id;
+}
+
+export async function voteOnUnblockRequest(
+  requestId: string,
+  vote: UnblockVote
+): Promise<void> {
+  const docRef = doc(db, UNBLOCK_COLLECTION, requestId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) throw new Error('Pedido de desbloqueio não encontrado');
+
+  const current = snap.data() as UnblockRequest;
+  const existingVotes = current.votes || [];
+  // Replace vote by same user if already voted, or append
+  const filtered = existingVotes.filter(v => v.user !== vote.user);
+  filtered.push(vote);
+
+  await setDoc(
+    docRef,
+    {
+      votes: filtered,
+      status: current.status === 'pendente' ? 'em_discussao' : current.status,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+}
+
+export async function resolveUnblockRequest(
+  requestId: string,
+  status: UnblockStatus,
+  verdictNote: string,
+  reviewerName: string
+): Promise<void> {
+  const docRef = doc(db, UNBLOCK_COLLECTION, requestId);
+  const snap = await getDoc(docRef);
+  if (!snap.exists()) throw new Error('Pedido de desbloqueio não encontrado');
+  const reqData = snap.data() as UnblockRequest;
+
+  await setDoc(
+    docRef,
+    {
+      status,
+      verdictNote,
+      reviewedBy: reviewerName,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+
+  // If approved (desbloquear), automatically remove 'bloqueado' group from the user in Firestore!
+  if (status === 'aprovado' && reqData.userUid) {
+    try {
+      const userDocRef = doc(db, USER_ROLES_COLLECTION, reqData.userUid);
+      const userSnap = await getDoc(userDocRef);
+      if (userSnap.exists()) {
+        const userData = userSnap.data() as UserRightsRecord;
+        const newGroups = (userData.groups || []).filter(g => g !== 'bloqueado');
+        if (!newGroups.includes('confirmado')) newGroups.push('confirmado');
+        await setDoc(
+          userDocRef,
+          {
+            groups: newGroups,
+            updatedAt: new Date().toISOString(),
+            updatedBy: reviewerName,
+          },
+          { merge: true }
+        );
+      }
+    } catch (err) {
+      console.warn('Could not auto-lift user_roles block:', err);
+    }
+  }
+}
+
+// --- 9.3 CONSELHO DE ARBITRAGEM (ARBCOM) ---
+
+export function subscribeToArbComCases(
+  callback: (cases: ArbComCase[]) => void
+): Unsubscribe {
+  const colRef = collection(db, ARBCOM_COLLECTION);
+  const q = query(colRef, orderBy('createdAt', 'desc'), limit(50));
+
+  return onSnapshot(
+    q,
+    snapshot => {
+      const cases: ArbComCase[] = [];
+      snapshot.forEach(docSnap => {
+        cases.push({ id: docSnap.id, ...docSnap.data() } as ArbComCase);
+      });
+      callback(cases);
+    },
+    error => {
+      console.warn('Firestore onSnapshot error for ArbCom cases:', error);
+      callback([]);
+    }
+  );
+}
+
+export async function createArbComCase(
+  data: Omit<ArbComCase, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<string> {
+  const docRef = await addDoc(collection(db, ARBCOM_COLLECTION), {
+    ...data,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  return docRef.id;
+}
+
+export async function updateArbComCase(
+  id: string,
+  updates: Partial<ArbComCase>
+): Promise<void> {
+  const docRef = doc(db, ARBCOM_COLLECTION, id);
+  await setDoc(
+    docRef,
+    {
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+}
+
+// --- 9.4 CÓDIGO UNIVERSAL DE CONDUTA (UCOC) ---
+
+export function subscribeToUCoCReports(
+  callback: (reports: UCoCReport[]) => void
+): Unsubscribe {
+  const colRef = collection(db, UCOC_COLLECTION);
+  const q = query(colRef, orderBy('createdAt', 'desc'), limit(50));
+
+  return onSnapshot(
+    q,
+    snapshot => {
+      const reports: UCoCReport[] = [];
+      snapshot.forEach(docSnap => {
+        reports.push({ id: docSnap.id, ...docSnap.data() } as UCoCReport);
+      });
+      callback(reports);
+    },
+    error => {
+      console.warn('Firestore onSnapshot error for UCoC reports:', error);
+      callback([]);
+    }
+  );
+}
+
+export async function createUCoCReport(
+  data: Omit<UCoCReport, 'id' | 'status' | 'createdAt' | 'updatedAt'>
+): Promise<string> {
+  const docRef = await addDoc(collection(db, UCOC_COLLECTION), {
+    ...data,
+    status: 'pendente',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  return docRef.id;
+}
+
+export async function resolveUCoCReport(
+  id: string,
+  status: UCoCStatus,
+  resolution: string,
+  handledBy: string
+): Promise<void> {
+  const docRef = doc(db, UCOC_COLLECTION, id);
+  await setDoc(
+    docRef,
+    {
+      status,
+      resolution,
+      handledBy,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+}
+
 
 

@@ -117,6 +117,34 @@ service cloud.firestore {
       allow delete: if isSignedIn();
     }
 
+    // CheckUser / Sockpuppet cases
+    match /checkuser_cases/{caseId} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+
+    // Unblock discussion requests
+    match /unblock_requests/{requestId} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+
+    // Arbitration Committee (ArbCom) cases
+    match /arbcom_cases/{caseId} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+
+    // Universal Code of Conduct (UCoC) reports
+    match /ucoc_reports/{reportId} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;

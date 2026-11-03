@@ -137,6 +137,81 @@
         "timestamp": { "type": "string" }
       },
       "required": ["pageSlug", "newLevel", "performedBy", "performedByUid", "timestamp"]
+    },
+    "CheckUserCase": {
+      "title": "CheckUserCase",
+      "description": "Investigation into suspected sockpuppetry accounts (contas fantoches) by checkusers or bureaucrats",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 250 },
+        "primarySuspect": { "type": "string", "maxLength": 100 },
+        "suspectedPuppets": { "type": "array" },
+        "status": { "type": "string", "enum": ["aberto", "investigando", "confirmado_fantoche", "inocente", "encerrado"] },
+        "evidence": { "type": "string", "maxLength": 10000 },
+        "openedBy": { "type": "string", "maxLength": 100 },
+        "openedByUid": { "type": "string", "maxLength": 128 },
+        "verdict": { "type": "string", "maxLength": 5000 },
+        "investigatedBy": { "type": "string", "maxLength": 100 },
+        "timestamp": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "primarySuspect", "status", "openedBy", "timestamp"]
+    },
+    "UnblockRequest": {
+      "title": "UnblockRequest",
+      "description": "Appeals and community/administrator discussions regarding user unblocks",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "maxLength": 100 },
+        "userUid": { "type": "string", "maxLength": 128 },
+        "blockedBy": { "type": "string", "maxLength": 100 },
+        "blockReason": { "type": "string", "maxLength": 1000 },
+        "appealReason": { "type": "string", "maxLength": 5000 },
+        "status": { "type": "string", "enum": ["pendente", "em_discussao", "aprovado", "recusado"] },
+        "verdictNote": { "type": "string", "maxLength": 2000 },
+        "reviewedBy": { "type": "string", "maxLength": 100 },
+        "votes": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["username", "userUid", "appealReason", "status", "createdAt"]
+    },
+    "ArbComCase": {
+      "title": "ArbComCase",
+      "description": "Binding dispute resolution cases deliberated by the Arbitration Committee (Conselho de Arbitragem)",
+      "type": "object",
+      "properties": {
+        "caseNumber": { "type": "string", "maxLength": 50 },
+        "title": { "type": "string", "maxLength": 250 },
+        "plaintiff": { "type": "string", "maxLength": 100 },
+        "respondent": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "enum": ["admissibilidade", "instrucao", "deliberacao", "encerrado"] },
+        "description": { "type": "string", "maxLength": 10000 },
+        "arbitrators": { "type": "array" },
+        "finalDecision": { "type": "string", "maxLength": 5000 },
+        "remedies": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "plaintiff", "respondent", "status", "createdAt"]
+    },
+    "UCoCReport": {
+      "title": "UCoCReport",
+      "description": "Universal Code of Conduct (Código Universal de Conduta) violation incident reports and remedies",
+      "type": "object",
+      "properties": {
+        "reportedUser": { "type": "string", "maxLength": 100 },
+        "reporterUser": { "type": "string", "maxLength": 100 },
+        "category": { "type": "string", "enum": ["assedio", "discriminacao", "abuso_de_poder", "incitacao_ao_odio", "vandalismo_psicologico"] },
+        "description": { "type": "string", "maxLength": 5000 },
+        "pageRelated": { "type": "string", "maxLength": 250 },
+        "status": { "type": "string", "enum": ["pendente", "sob_analise", "sancionado", "arquivado"] },
+        "resolution": { "type": "string", "maxLength": 2000 },
+        "handledBy": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["reportedUser", "reporterUser", "category", "description", "status", "createdAt"]
     }
   },
   "firestore": {
@@ -167,6 +242,22 @@
     "/page_protection_logs/{logId}": {
       "schema": { "$ref": "#/entities/PageProtectionLog" },
       "description": "Audit trail of protection and unprotection actions on wiki pages"
+    },
+    "/checkuser_cases/{caseId}": {
+      "schema": { "$ref": "#/entities/CheckUserCase" },
+      "description": "CheckUser sockpuppetry investigations"
+    },
+    "/unblock_requests/{requestId}": {
+      "schema": { "$ref": "#/entities/UnblockRequest" },
+      "description": "Community and admin unblock deliberation threads"
+    },
+    "/arbcom_cases/{caseId}": {
+      "schema": { "$ref": "#/entities/ArbComCase" },
+      "description": "Arbitration Committee binding cases and rulings"
+    },
+    "/ucoc_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/UCoCReport" },
+      "description": "Universal Code of Conduct violations and resolutions"
     }
   }
 }
