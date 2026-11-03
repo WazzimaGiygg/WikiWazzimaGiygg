@@ -8,6 +8,22 @@ export type PageNamespace =
   | 'Category' 
   | 'User';
 
+export type PageProtectionLevel = 'unprotected' | 'semi_protected' | 'locked';
+
+export interface PageProtectionLogEntry {
+  id?: string;
+  pageSlug: string;
+  pageTitle: string;
+  action: 'protect' | 'unprotect' | 'modify';
+  previousLevel: PageProtectionLevel;
+  newLevel: PageProtectionLevel;
+  reason: string;
+  expiry: string;
+  performedBy: string;
+  performedByUid: string;
+  timestamp: string;
+}
+
 export interface WikiPage {
   slug: string;
   title: string;
@@ -22,6 +38,12 @@ export interface WikiPage {
   createdAt: string;
   updatedAt: string;
   isLocked?: boolean;
+  protectionLevel?: PageProtectionLevel;
+  protectionReason?: string;
+  protectedBy?: string;
+  protectedByUid?: string;
+  protectedAt?: string;
+  protectionExpiry?: string;
 }
 
 export interface PageRevision {

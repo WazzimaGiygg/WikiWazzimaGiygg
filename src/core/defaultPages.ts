@@ -13,6 +13,13 @@ export const INITIAL_PAGES: Record<string, WikiPage> = {
     createdAt: '2026-11-01T00:00:00.000Z',
     updatedAt: '2026-11-02T12:00:00.000Z',
     summary: 'Criação da Página Principal do WikiWazzimaGiygg',
+    protectionLevel: 'locked',
+    isLocked: true,
+    protectionReason: 'Página inicial protegida por alta visibilidade e integridade do portal',
+    protectedBy: 'Administração',
+    protectedByUid: 'system_admin',
+    protectedAt: '2026-11-01T00:00:00.000Z',
+    protectionExpiry: 'infinity',
     content: `{{Infobox software
 | nome = WikiWazzimaGiygg
 | logotipo = /assets/aistudio/image_19fe7a14.png

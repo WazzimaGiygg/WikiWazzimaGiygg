@@ -23,6 +23,8 @@ import {
   UserRightsRecord,
   BureaucratLogEntry,
   WikiUser,
+  PageProtectionLevel,
+  PageProtectionLogEntry,
 } from '../types/wiki';
 import { INITIAL_PAGES } from '../core/defaultPages';
 import { slugify } from '../core/parser';
@@ -32,6 +34,7 @@ const RECENT_CHANGES_COLLECTION = 'recent_changes';
 const WIKI_SETTINGS_COLLECTION = 'wiki_settings';
 const USER_ROLES_COLLECTION = 'user_roles';
 const BUREAUCRAT_LOGS_COLLECTION = 'bureaucrat_logs';
+const PAGE_PROTECTION_LOGS_COLLECTION = 'page_protection_logs';
 export const DEFAULT_SUPER_ADMIN_EMAIL = 'pedrohenriquecardonaperes@gmail.com';
 
 let isSeeding = false;
@@ -75,6 +78,24 @@ export async function seedInitialPagesIfNeeded(): Promise<void> {
           revId: page.latestRevisionId,
           minorEdit: false,
         });
+      }
+    } else {
+      // If Página_principal already exists in Firestore but lacks protectionLevel, initialize it
+      const existingData = snap.data();
+      if (!existingData.protectionLevel) {
+        await setDoc(
+          mainDocRef,
+          {
+            protectionLevel: 'locked',
+            isLocked: true,
+            protectionReason: 'Página inicial protegida por alta visibilidade e integridade do portal',
+            protectedBy: 'Administração',
+            protectedByUid: 'system_admin',
+            protectedAt: '2026-11-01T00:00:00.000Z',
+            protectionExpiry: 'infinity',
+          },
+          { merge: true }
+        );
       }
     }
   } catch (error) {
@@ -296,6 +317,7 @@ export async function savePage(params: {
   authorId: string;
   minorEdit?: boolean;
   namespace?: PageNamespace;
+  user?: WikiUser;
 }): Promise<WikiPage> {
   const slug = slugify(params.slug);
   const path = `${WIKI_PAGES_COLLECTION}/${slug}`;
@@ -330,6 +352,23 @@ export async function savePage(params: {
     // If not found in Firestore, existingPage is null
   }
 
+  // ENFORCE PROTECTION RULES DURING EDIT OPERATIONS
+  if (existingPage && params.user) {
+    const check = canUserEditPage(existingPage, params.user);
+    if (!check.allowed) {
+      throw new Error(`Edição bloqueada: ${check.reason}`);
+    }
+  }
+
+  // Preserve existing protection metadata so regular edits never wipe out protection status
+  const protectionLevel = existingPage?.protectionLevel || (existingPage?.isLocked ? 'locked' : 'unprotected');
+  const isLocked = existingPage?.isLocked ?? (protectionLevel === 'locked');
+  const protectionReason = existingPage?.protectionReason;
+  const protectedBy = existingPage?.protectedBy;
+  const protectedByUid = existingPage?.protectedByUid;
+  const protectedAt = existingPage?.protectedAt;
+  const protectionExpiry = existingPage?.protectionExpiry;
+
   const updatedPage: WikiPage = {
     slug,
     title: params.title,
@@ -343,6 +382,13 @@ export async function savePage(params: {
     categories,
     createdAt: existingPage?.createdAt || now,
     updatedAt: now,
+    isLocked,
+    protectionLevel,
+    ...(protectionReason ? { protectionReason } : {}),
+    ...(protectedBy ? { protectedBy } : {}),
+    ...(protectedByUid ? { protectedByUid } : {}),
+    ...(protectedAt ? { protectedAt } : {}),
+    ...(protectionExpiry ? { protectionExpiry } : {}),
   };
 
   const newRevision: PageRevision = {
@@ -791,4 +837,249 @@ export async function saveUserRights(params: {
     handleFirestoreError(error, OperationType.WRITE, `${USER_ROLES_COLLECTION}/${params.targetUid}`);
   }
 }
+
+// 8. PAGE PROTECTION LEVEL SYSTEM (LOCKED, SEMI-PROTECTED, UNPROTECTED)
+
+/**
+ * Checks if a protection rule is currently active, validating expiration if set.
+ */
+export function isPageProtectionActive(page?: WikiPage | null): boolean {
+  if (!page) return false;
+  const level = page.protectionLevel || (page.isLocked ? 'locked' : 'unprotected');
+  if (level === 'unprotected') return false;
+
+  if (page.protectionExpiry && page.protectionExpiry !== 'infinity' && page.protectionExpiry !== 'Indefinido') {
+    try {
+      const expiryDate = new Date(page.protectionExpiry);
+      if (!isNaN(expiryDate.getTime()) && expiryDate.getTime() <= Date.now()) {
+        return false; // Protection has expired
+      }
+    } catch {
+      // Ignore parse failure, keep protection active
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Returns effective protection level, taking expiry into account.
+ */
+export function getEffectiveProtectionLevel(page?: WikiPage | null): PageProtectionLevel {
+  if (!page) return 'unprotected';
+  if (!isPageProtectionActive(page)) return 'unprotected';
+  return page.protectionLevel || (page.isLocked ? 'locked' : 'unprotected');
+}
+
+/**
+ * Evaluates whether a given user has sufficient privileges to edit a page.
+ */
+export function canUserEditPage(
+  page: WikiPage | null,
+  user: WikiUser
+): { allowed: boolean; reason?: string; isProtected: boolean; level: PageProtectionLevel } {
+  // 1. Anonymous users cannot edit any page
+  if (user.isAnonymous) {
+    return {
+      allowed: false,
+      reason: 'Contribuições anônimas não são permitidas. Por favor, autentique-se com sua conta Google.',
+      isProtected: false,
+      level: 'unprotected',
+    };
+  }
+
+  // 2. Blocked accounts cannot edit
+  if (user.isBlocked) {
+    return {
+      allowed: false,
+      reason: 'Sua conta está bloqueada no wiki pela administração comunitária.',
+      isProtected: false,
+      level: 'unprotected',
+    };
+  }
+
+  // 3. New page creation
+  if (!page) {
+    return { allowed: true, isProtected: false, level: 'unprotected' };
+  }
+
+  const effectiveLevel = getEffectiveProtectionLevel(page);
+  const isProtected = effectiveLevel !== 'unprotected';
+
+  if (!isProtected) {
+    return { allowed: true, isProtected: false, level: 'unprotected' };
+  }
+
+  // 4. Locked / Fully protected page (only Bureaucrats and Sysops / Admins)
+  if (effectiveLevel === 'locked') {
+    if (user.isBureaucrat || user.isAdmin) {
+      return { allowed: true, isProtected: true, level: 'locked' };
+    }
+    return {
+      allowed: false,
+      reason:
+        page.protectionReason ||
+        'Esta página está bloqueada (totalmente protegida). Apenas administradores e burocratas podem editá-la.',
+      isProtected: true,
+      level: 'locked',
+    };
+  }
+
+  // 5. Semi-protected page (Confirmed users, rollbackers, auto-reviewers, admins, bureaucrats)
+  if (effectiveLevel === 'semi_protected') {
+    const isConfirmedOrPrivileged =
+      user.isBureaucrat ||
+      user.isAdmin ||
+      user.groups?.includes('confirmado') ||
+      user.groups?.includes('autorrevisor') ||
+      user.groups?.includes('reversor') ||
+      user.groups?.includes('eliminador') ||
+      (user.editCount && user.editCount >= 3);
+
+    if (isConfirmedOrPrivileged) {
+      return { allowed: true, isProtected: true, level: 'semi_protected' };
+    }
+
+    return {
+      allowed: false,
+      reason:
+        page.protectionReason ||
+        'Esta página está semiprotegida contra edições de contas não confirmadas ou recém-criadas.',
+      isProtected: true,
+      level: 'semi_protected',
+    };
+  }
+
+  return { allowed: true, isProtected: false, level: 'unprotected' };
+}
+
+/**
+ * Persists a new protection level for a wiki page in Firestore, recording audit logs.
+ */
+export async function setPageProtection(params: {
+  pageSlug: string;
+  pageTitle?: string;
+  level: PageProtectionLevel;
+  reason: string;
+  expiry?: string;
+  bureaucrat: { uid: string; username: string };
+}): Promise<void> {
+  const slug = slugify(params.pageSlug);
+  const now = new Date().toISOString();
+
+  const existingSnap = await getDoc(doc(db, WIKI_PAGES_COLLECTION, slug));
+  if (!existingSnap.exists()) {
+    throw new Error(`A página "${slug}" não foi localizada no Firestore.`);
+  }
+
+  const existingPage = existingSnap.data() as WikiPage;
+  const previousLevel: PageProtectionLevel =
+    existingPage.protectionLevel || (existingPage.isLocked ? 'locked' : 'unprotected');
+  const action: 'protect' | 'unprotect' | 'modify' =
+    params.level === 'unprotected'
+      ? 'unprotect'
+      : previousLevel === 'unprotected'
+      ? 'protect'
+      : 'modify';
+
+  const isLocked = params.level === 'locked';
+
+  // 1. Update page document in Firestore
+  const updatePayload: Partial<WikiPage> = {
+    protectionLevel: params.level,
+    isLocked,
+    protectionReason: params.level === 'unprotected' ? '' : params.reason.trim() || 'Sem motivo especificado',
+    protectedBy: params.level === 'unprotected' ? '' : params.bureaucrat.username,
+    protectedByUid: params.level === 'unprotected' ? '' : params.bureaucrat.uid,
+    protectedAt: params.level === 'unprotected' ? '' : now,
+    protectionExpiry: params.level === 'unprotected' ? '' : (params.expiry || 'infinity'),
+    updatedAt: now,
+  };
+
+  await setDoc(doc(db, WIKI_PAGES_COLLECTION, slug), updatePayload, { merge: true });
+
+  // 2. Add entry to page_protection_logs
+  const logEntry: PageProtectionLogEntry = {
+    pageSlug: slug,
+    pageTitle: existingPage.title || params.pageTitle || slug,
+    action,
+    previousLevel,
+    newLevel: params.level,
+    reason: params.reason.trim() || 'Sem motivo especificado',
+    expiry: params.expiry || 'infinity',
+    performedBy: params.bureaucrat.username,
+    performedByUid: params.bureaucrat.uid,
+    timestamp: now,
+  };
+
+  await addDoc(collection(db, PAGE_PROTECTION_LOGS_COLLECTION), logEntry);
+
+  // 3. Register in general bureaucrat audit log
+  await addDoc(collection(db, BUREAUCRAT_LOGS_COLLECTION), {
+    timestamp: now,
+    bureaucratUid: params.bureaucrat.uid,
+    bureaucratName: params.bureaucrat.username,
+    targetUid: slug,
+    targetName: `Página: ${existingPage.title}`,
+    addedGroups: [],
+    removedGroups: [],
+    reason: `Proteção alterada para [${params.level}]. Motivo: ${params.reason.trim() || 'Sem motivo'}`,
+    expiry: params.expiry || 'infinity',
+  });
+}
+
+/**
+ * Real-time listener for page protection audit log entries.
+ */
+export function subscribeToPageProtectionLogs(
+  callback: (logs: PageProtectionLogEntry[]) => void,
+  maxCount = 50
+): Unsubscribe {
+  const colRef = collection(db, PAGE_PROTECTION_LOGS_COLLECTION);
+  const q = query(colRef, orderBy('timestamp', 'desc'), limit(maxCount));
+
+  return onSnapshot(
+    q,
+    snapshot => {
+      const logs: PageProtectionLogEntry[] = [];
+      snapshot.forEach(docSnap => {
+        logs.push({ id: docSnap.id, ...docSnap.data() } as PageProtectionLogEntry);
+      });
+      callback(logs);
+    },
+    error => {
+      console.warn('Firestore onSnapshot error for protection logs:', error);
+      callback([]);
+    }
+  );
+}
+
+/**
+ * Real-time listener for all currently protected pages in the wiki.
+ */
+export function subscribeToProtectedPages(
+  callback: (pages: WikiPage[]) => void
+): Unsubscribe {
+  const colRef = collection(db, WIKI_PAGES_COLLECTION);
+
+  return onSnapshot(
+    colRef,
+    snapshot => {
+      const protectedPages: WikiPage[] = [];
+      snapshot.forEach(docSnap => {
+        const page = docSnap.data() as WikiPage;
+        if (isPageProtectionActive(page)) {
+          protectedPages.push(page);
+        }
+      });
+      protectedPages.sort((a, b) => a.title.localeCompare(b.title));
+      callback(protectedPages);
+    },
+    error => {
+      console.warn('Firestore onSnapshot error for protected pages:', error);
+      callback([]);
+    }
+  );
+}
+
 

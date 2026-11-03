@@ -16,7 +16,14 @@
         "latestRevisionId": { "type": "string", "maxLength": 128 },
         "categories": { "type": "array" },
         "createdAt": { "type": "string" },
-        "updatedAt": { "type": "string" }
+        "updatedAt": { "type": "string" },
+        "protectionLevel": { "type": "string", "enum": ["unprotected", "semi_protected", "locked"] },
+        "protectionReason": { "type": "string", "maxLength": 500 },
+        "protectedBy": { "type": "string", "maxLength": 100 },
+        "protectedByUid": { "type": "string", "maxLength": 128 },
+        "protectedAt": { "type": "string" },
+        "protectionExpiry": { "type": "string", "maxLength": 100 },
+        "isLocked": { "type": "boolean" }
       },
       "required": ["slug", "title", "content", "author"]
     },
@@ -112,6 +119,24 @@
         "updatedBy": { "type": "string", "maxLength": 100 }
       },
       "required": ["id", "name", "category", "description", "isActive", "installedVia"]
+    },
+    "PageProtectionLog": {
+      "title": "PageProtectionLog",
+      "description": "Audit record of page protection changes performed by bureaucrats or administrators",
+      "type": "object",
+      "properties": {
+        "pageSlug": { "type": "string", "maxLength": 200 },
+        "pageTitle": { "type": "string", "maxLength": 250 },
+        "action": { "type": "string", "enum": ["protect", "unprotect", "modify"] },
+        "previousLevel": { "type": "string", "enum": ["unprotected", "semi_protected", "locked"] },
+        "newLevel": { "type": "string", "enum": ["unprotected", "semi_protected", "locked"] },
+        "reason": { "type": "string", "maxLength": 500 },
+        "expiry": { "type": "string", "maxLength": 100 },
+        "performedBy": { "type": "string", "maxLength": 100 },
+        "performedByUid": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["pageSlug", "newLevel", "performedBy", "performedByUid", "timestamp"]
     }
   },
   "firestore": {
@@ -138,6 +163,10 @@
     "/wiki_extensions/{extensionId}": {
       "schema": { "$ref": "#/entities/WikiExtension" },
       "description": "MediaWiki extensions synchronized between codebase directory and Firebase, controlled by bureaucrats"
+    },
+    "/page_protection_logs/{logId}": {
+      "schema": { "$ref": "#/entities/PageProtectionLog" },
+      "description": "Audit trail of protection and unprotection actions on wiki pages"
     }
   }
 }

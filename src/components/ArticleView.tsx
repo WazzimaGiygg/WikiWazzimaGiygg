@@ -16,10 +16,14 @@ import {
   ArrowRight,
   Lock,
   LogIn,
+  ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import { WikiPage } from '../types/wiki';
 import { parseWikitext } from '../core/parser';
+import { canUserEditPage, getEffectiveProtectionLevel } from '../services/wikiService';
+import { PageProtectionModal } from './PageProtectionModal';
 
 interface ArticleViewProps {
   page: WikiPage | null;
@@ -39,6 +43,12 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
   const { existingPageSlugs, navigateToPage, activeTab, setActiveTab, currentUser, loginWithGoogle } = useWiki();
   const [showTOC, setShowTOC] = useState(true);
   const [isWatched, setIsWatched] = useState(false);
+  const [showProtectionModal, setShowProtectionModal] = useState(false);
+
+  const effectiveLevel = getEffectiveProtectionLevel(page);
+  const editPermission = page
+    ? canUserEditPage(page, currentUser)
+    : { allowed: !currentUser.isAnonymous, isProtected: false, level: 'unprotected' as const };
 
   // Parse wikitext whenever page content changes
   const parseResult = useMemo(() => {
@@ -192,28 +202,64 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
             <span>Ler</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => onEdit()}
-            className="px-3 py-1.5 border-t border-r border-l border-transparent rounded-t font-medium text-[#0645ad] dark:text-[#6ba4ff] hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-1"
-          >
-            <Edit3 className="w-3 h-3" />
-            <span>Editar</span>
-          </button>
+          {editPermission.allowed ? (
+            <button
+              type="button"
+              onClick={() => onEdit()}
+              className="px-3 py-1.5 border-t border-r border-l border-transparent rounded-t font-medium text-[#0645ad] dark:text-[#6ba4ff] hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-1 cursor-pointer"
+            >
+              <Edit3 className="w-3 h-3" />
+              <span>Editar</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onEdit()}
+              className="px-3 py-1.5 border-t border-r border-l border-transparent rounded-t font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-1 cursor-pointer"
+              title={editPermission.reason || 'Página protegida contra alterações'}
+            >
+              <Lock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+              <span>Ver código-fonte</span>
+            </button>
+          )}
 
           <button
             type="button"
             onClick={onViewHistory}
-            className="px-3 py-1.5 border-t border-r border-l border-transparent rounded-t font-medium text-[#0645ad] dark:text-[#6ba4ff] hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-1"
+            className="px-3 py-1.5 border-t border-r border-l border-transparent rounded-t font-medium text-[#0645ad] dark:text-[#6ba4ff] hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-1 cursor-pointer"
           >
             <History className="w-3 h-3" />
             <span>Ver histórico</span>
           </button>
 
+          {(currentUser.isBureaucrat || currentUser.isAdmin) && (
+            <button
+              type="button"
+              onClick={() => setShowProtectionModal(true)}
+              className={`px-3 py-1.5 border-t border-r border-l border-transparent rounded-t font-medium flex items-center gap-1 cursor-pointer ${
+                effectiveLevel === 'locked'
+                  ? 'text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40'
+                  : effectiveLevel === 'semi_protected'
+                  ? 'text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                  : 'text-[#0645ad] dark:text-[#6ba4ff] hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+              title="Configurar nível de proteção (bloqueada, semiprotegida)"
+            >
+              {effectiveLevel === 'locked' ? (
+                <Lock className="w-3 h-3 text-red-600 dark:text-red-400" />
+              ) : effectiveLevel === 'semi_protected' ? (
+                <ShieldCheck className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+              ) : (
+                <ShieldAlert className="w-3 h-3 text-blue-600 dark:text-blue-400" />
+              )}
+              <span>Proteger</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => setIsWatched(prev => !prev)}
-            className={`p-1.5 rounded-t text-gray-500 hover:text-amber-500 ${
+            className={`p-1.5 rounded-t text-gray-500 hover:text-amber-500 cursor-pointer ${
               isWatched ? 'text-amber-500' : ''
             }`}
             title={isWatched ? 'Desvigiar esta página' : 'Vigiar esta página'}
@@ -225,16 +271,87 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
 
       {/* Main Title (firstHeading) */}
       <div className="mb-4">
-        <h1
-          id="firstHeading"
-          className="text-2xl sm:text-3xl font-serif font-normal text-gray-900 dark:text-gray-100 border-b border-[#a2a9b1] dark:border-gray-700 pb-2 mb-1"
-        >
-          {page.title}
-        </h1>
+        <div className="flex items-center justify-between border-b border-[#a2a9b1] dark:border-gray-700 pb-2 mb-1 flex-wrap gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1
+              id="firstHeading"
+              className="text-2xl sm:text-3xl font-serif font-normal text-gray-900 dark:text-gray-100"
+            >
+              {page.title}
+            </h1>
+
+            {effectiveLevel === 'locked' && (
+              <button
+                type="button"
+                onClick={() => setShowProtectionModal(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-sans font-semibold bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 border border-red-300 dark:border-red-800 hover:opacity-90 cursor-pointer shadow-2xs"
+                title={`Página Bloqueada: ${page.protectionReason || 'Apenas administradores e burocratas podem editar'}`}
+              >
+                <Lock className="w-3 h-3 text-red-600 dark:text-red-400" />
+                <span>Bloqueada</span>
+              </button>
+            )}
+
+            {effectiveLevel === 'semi_protected' && (
+              <button
+                type="button"
+                onClick={() => setShowProtectionModal(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-sans font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800 hover:opacity-90 cursor-pointer shadow-2xs"
+                title={`Página Semiprotegida: ${page.protectionReason || 'Apenas usuários confirmados ou administradores podem editar'}`}
+              >
+                <ShieldCheck className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                <span>Semiprotegida</span>
+              </button>
+            )}
+          </div>
+        </div>
+
         <div id="siteSub" className="text-[11px] text-gray-500 dark:text-gray-400 font-sans italic">
           De WikiWazzimaGiygg, a enciclopédia livre adaptada para TypeScript & Firebase.
         </div>
       </div>
+
+      {/* Protection Alert Banner */}
+      {effectiveLevel !== 'unprotected' && (
+        <div
+          className={`mb-4 p-3 rounded border text-xs flex items-start gap-2.5 ${
+            effectiveLevel === 'locked'
+              ? 'bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-900 dark:text-red-200'
+              : 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200'
+          }`}
+        >
+          {effectiveLevel === 'locked' ? (
+            <Lock className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+          ) : (
+            <ShieldCheck className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+          )}
+          <div className="flex-1">
+            <div className="font-semibold text-[13px]">
+              {effectiveLevel === 'locked'
+                ? 'Esta página está totalmente protegida contra edições (Bloqueada).'
+                : 'Esta página está semiprotegida contra edições de contas recentes ou não confirmadas.'}
+            </div>
+            <p className="text-[11px] mt-0.5 opacity-90">
+              {page.protectionReason
+                ? `Motivo: ${page.protectionReason}`
+                : 'Proteção definida preventivamente pela administração comunitária.'}
+              {page.protectedBy && ` • Definida por ${page.protectedBy}`}
+              {page.protectionExpiry && page.protectionExpiry !== 'infinity'
+                ? ` • Expira em ${new Date(page.protectionExpiry).toLocaleDateString('pt-BR')}`
+                : ' • Duração permanente'}
+            </p>
+          </div>
+          {(currentUser.isBureaucrat || currentUser.isAdmin) && (
+            <button
+              type="button"
+              onClick={() => setShowProtectionModal(true)}
+              className="text-[11px] underline font-semibold hover:opacity-80 shrink-0 cursor-pointer ml-2"
+            >
+              Alterar proteção
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Table of Contents (TOC) */}
       {parseResult.toc.length >= 2 && (
@@ -337,6 +454,15 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
           e da GNU General Public License v2+.
         </div>
       </footer>
+
+      {/* Page Protection Modal */}
+      {page && (
+        <PageProtectionModal
+          page={page}
+          isOpen={showProtectionModal}
+          onClose={() => setShowProtectionModal(false)}
+        />
+      )}
     </article>
   );
 };

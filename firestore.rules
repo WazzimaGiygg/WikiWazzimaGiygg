@@ -103,6 +103,13 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Page protection logs
+    match /page_protection_logs/{logId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
     // Wiki extensions (synchronized with codebase & Firestore, managed by bureaucrats)
     match /wiki_extensions/{extensionId} {
       allow read: if true;

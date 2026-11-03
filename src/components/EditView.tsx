@@ -18,10 +18,13 @@ import {
   FileCode,
   Lock,
   LogIn,
+  ShieldAlert,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import { WikiPage } from '../types/wiki';
-import { savePage } from '../services/wikiService';
+import { savePage, canUserEditPage, getEffectiveProtectionLevel } from '../services/wikiService';
 import { parseWikitext } from '../core/parser';
 import { computeRevisionDiff } from '../core/diff';
 
@@ -41,6 +44,14 @@ export const EditView: React.FC<EditViewProps> = ({
 }) => {
   const { currentUser, existingPageSlugs, loginWithGoogle } = useWiki();
 
+  const editPermission = useMemo(() => {
+    return page
+      ? canUserEditPage(page, currentUser)
+      : { allowed: !currentUser.isAnonymous, isProtected: false, level: 'unprotected' as const };
+  }, [page, currentUser]);
+
+  const [copiedSource, setCopiedSource] = useState<boolean>(false);
+
   const [content, setContent] = useState<string>(() => {
     return page?.content || `== Introdução ==\nEscreva o conteúdo do seu artigo aqui em wikitexto.\n\n== Detalhes ==\n* Item 1\n* Item 2\n\n[[Categoria:Geral]]`;
   });
@@ -52,6 +63,12 @@ export const EditView: React.FC<EditViewProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleCopySource = () => {
+    navigator.clipboard.writeText(content);
+    setCopiedSource(true);
+    setTimeout(() => setCopiedSource(false), 2000);
+  };
 
   // Computed live preview
   const livePreview = useMemo(() => {
@@ -96,6 +113,10 @@ export const EditView: React.FC<EditViewProps> = ({
       setErrorMessage('Contribuições não são permitidas sem login. Por favor, entre com sua conta para poder publicar alterações.');
       return;
     }
+    if (!editPermission.allowed) {
+      setErrorMessage(`Operação bloqueada: ${editPermission.reason}`);
+      return;
+    }
     if (!content.trim()) {
       setErrorMessage('O conteúdo da página não pode estar vazio.');
       return;
@@ -114,6 +135,7 @@ export const EditView: React.FC<EditViewProps> = ({
         author: currentUser.username,
         authorId: currentUser.uid,
         minorEdit: isMinor,
+        user: currentUser,
       });
 
       onSaved(saved);
@@ -138,13 +160,58 @@ export const EditView: React.FC<EditViewProps> = ({
       {/* Title */}
       <div className="border-b border-[#a2a9b1] dark:border-gray-700 pb-2 mb-3">
         <h1 className="text-2xl font-serif text-gray-900 dark:text-gray-100 flex items-center gap-2">
-          <span>A editar</span>
+          <span>{editPermission.allowed ? 'A editar' : 'A ver o código-fonte de'}</span>
           <span className="font-bold underline decoration-blue-500">{page?.title || slug.replace(/_/g, ' ')}</span>
+          {!editPermission.allowed && (
+            <span className="ml-2 inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded font-sans font-semibold bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 border border-red-300 dark:border-red-800">
+              <Lock className="w-3 h-3" />
+              <span>Protegida</span>
+            </span>
+          )}
         </h1>
         <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-          As alterações serão gravadas na coleção <code className="font-mono text-blue-600 dark:text-blue-400">/wiki_pages/{slug}</code> do Firestore com controle de revisões.
+          {editPermission.allowed
+            ? `As alterações serão gravadas na coleção /wiki_pages/${slug} do Firestore com controle de revisões.`
+            : `Esta página possui restrições de edição ativas. O código-fonte abaixo está em modo somente leitura.`}
         </div>
       </div>
+
+      {/* Page Protection Alert for Unauthorized Users */}
+      {!editPermission.allowed && (
+        <div className="mb-4 p-3.5 bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-800 rounded text-xs text-red-900 dark:text-red-200 flex items-start justify-between gap-3 shadow-2xs">
+          <div className="flex items-start gap-2.5">
+            <Lock className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+            <div>
+              <div className="font-semibold text-sm">Esta página está protegida contra alterações</div>
+              <p className="text-[11px] mt-1 text-red-800 dark:text-red-300">
+                {page?.protectionReason || editPermission.reason || 'Esta página foi protegida pela administração comunitária.'}
+              </p>
+              <p className="text-[11px] mt-1 text-gray-600 dark:text-gray-400">
+                Você pode visualizar e copiar o código-fonte deste artigo abaixo, mas não possui permissões para gravá-lo no Firestore.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleCopySource}
+            className="px-3 py-1.5 bg-white dark:bg-gray-800 border border-red-300 dark:border-red-700 text-red-800 dark:text-red-200 rounded font-medium text-xs flex items-center gap-1.5 shrink-0 hover:bg-red-50 dark:hover:bg-red-900/40 cursor-pointer shadow-2xs"
+          >
+            {copiedSource ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+            <span>{copiedSource ? 'Copiado!' : 'Copiar código-fonte'}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Advisory Banner for Privileged Users Editing a Protected Page */}
+      {editPermission.allowed && editPermission.isProtected && (
+        <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
+          <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <span className="font-semibold">Modo Administrativo:</span> Você está editando uma página protegida ({editPermission.level === 'locked' ? 'Bloqueada' : 'Semiprotegida'}).
+            {page?.protectionReason && ` Motivo: "${page.protectionReason}".`}
+          </div>
+        </div>
+      )}
 
       {currentUser.isAnonymous && (
         <div className="mb-4 p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 rounded text-xs text-amber-900 dark:text-amber-200 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
@@ -286,7 +353,12 @@ export const EditView: React.FC<EditViewProps> = ({
         value={content}
         onChange={e => setContent(e.target.value)}
         rows={18}
-        className="w-full p-3 font-mono text-xs sm:text-sm bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 border border-[#a2a9b1] dark:border-gray-700 border-t-0 focus:outline-hidden focus:border-[#3366cc] focus:ring-1 focus:ring-[#3366cc] resize-y leading-relaxed shadow-inner"
+        readOnly={!editPermission.allowed}
+        className={`w-full p-3 font-mono text-xs sm:text-sm border border-[#a2a9b1] dark:border-gray-700 border-t-0 resize-y leading-relaxed shadow-inner ${
+          !editPermission.allowed
+            ? 'bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-300 cursor-not-allowed select-text'
+            : 'bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:border-[#3366cc] focus:ring-1 focus:ring-[#3366cc]'
+        }`}
         placeholder="Digite o conteúdo do artigo em wikitexto..."
       />
 
@@ -300,25 +372,32 @@ export const EditView: React.FC<EditViewProps> = ({
             type="text"
             value={summary}
             onChange={e => setSummary(e.target.value)}
-            placeholder="Ex: correção ortográfica, adição de fontes, atualização técnica..."
+            disabled={!editPermission.allowed}
+            placeholder={
+              !editPermission.allowed
+                ? 'Página protegida contra edições'
+                : 'Ex: correção ortográfica, adição de fontes, atualização técnica...'
+            }
             maxLength={250}
-            className="w-full p-2 bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 rounded text-xs"
+            className="w-full p-2 bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-700 rounded text-xs disabled:opacity-50"
           />
 
           {/* Quick preset buttons */}
-          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-            <span className="text-[11px] text-gray-500">Resumos rápidos:</span>
-            {presetSummaries.map(preset => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => setSummary(prev => (prev ? `${prev}, ${preset}` : preset))}
-                className="px-2 py-0.5 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-[11px] text-gray-700 dark:text-gray-300"
-              >
-                +{preset}
-              </button>
-            ))}
-          </div>
+          {editPermission.allowed && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+              <span className="text-[11px] text-gray-500">Resumos rápidos:</span>
+              {presetSummaries.map(preset => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setSummary(prev => (prev ? `${prev}, ${preset}` : preset))}
+                  className="px-2 py-0.5 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded text-[11px] text-gray-700 dark:text-gray-300 cursor-pointer"
+                >
+                  +{preset}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Checkboxes */}
@@ -327,8 +406,9 @@ export const EditView: React.FC<EditViewProps> = ({
             <input
               type="checkbox"
               checked={isMinor}
+              disabled={!editPermission.allowed}
               onChange={e => setIsMinor(e.target.checked)}
-              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 disabled:opacity-50"
             />
             <span>Esta é uma edição menor</span>
           </label>
@@ -342,7 +422,17 @@ export const EditView: React.FC<EditViewProps> = ({
 
         {/* Action Buttons */}
         <div className="pt-2 border-t border-gray-200 dark:border-gray-800 flex flex-wrap items-center gap-2">
-          {currentUser.isAnonymous ? (
+          {!editPermission.allowed ? (
+            <button
+              type="button"
+              disabled
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-medium rounded flex items-center gap-1.5 shadow-2xs cursor-not-allowed border border-gray-300 dark:border-gray-700"
+              title={editPermission.reason || 'Edição bloqueada'}
+            >
+              <Lock className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+              <span>Código-fonte protegido (Somente leitura)</span>
+            </button>
+          ) : currentUser.isAnonymous ? (
             <button
               type="button"
               onClick={loginWithGoogle}
@@ -361,6 +451,17 @@ export const EditView: React.FC<EditViewProps> = ({
             >
               <Save className="w-3.5 h-3.5" />
               <span>{isSaving ? 'A publicar...' : 'Publicar alterações'}</span>
+            </button>
+          )}
+
+          {!editPermission.allowed && (
+            <button
+              type="button"
+              onClick={handleCopySource}
+              className="px-3.5 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 rounded font-medium flex items-center gap-1.5 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+            >
+              {copiedSource ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+              <span>{copiedSource ? 'Código copiado!' : 'Copiar todo o código-fonte'}</span>
             </button>
           )}
 

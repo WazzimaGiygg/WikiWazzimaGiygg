@@ -22,14 +22,19 @@ import {
   UserRightsRecord,
   BureaucratLogEntry,
   WikiUser,
+  WikiPage,
+  PageProtectionLogEntry,
 } from '../types/wiki';
 import {
   saveUserRights,
   subscribeToAllUserRights,
   subscribeToBureaucratLogs,
+  subscribeToProtectedPages,
+  subscribeToPageProtectionLogs,
   getAllPagesList,
   DEFAULT_SUPER_ADMIN_EMAIL,
 } from '../services/wikiService';
+import { PageProtectionModal } from './PageProtectionModal';
 
 interface GroupDefinition {
   id: UserGroup;
@@ -102,7 +107,7 @@ export const SpecialBureaucratAdmin: React.FC = () => {
   const { currentUser, isBureaucrat, loginWithGoogle, navigateToPage } = useWiki();
 
   // Active view tab in Bureaucrat portal
-  const [activeTab, setActiveTab] = useState<'manage' | 'logs' | 'users'>('manage');
+  const [activeTab, setActiveTab] = useState<'manage' | 'protected_pages' | 'logs' | 'users'>('manage');
 
   // Search & Selected user state
   const [searchTarget, setSearchTarget] = useState<string>('');
@@ -128,6 +133,11 @@ export const SpecialBureaucratAdmin: React.FC = () => {
   const [allRights, setAllRights] = useState<UserRightsRecord[]>([]);
   const [logs, setLogs] = useState<BureaucratLogEntry[]>([]);
   const [knownUsers, setKnownUsers] = useState<Array<{ uid: string; username: string; email?: string }>>([]);
+  const [protectedPages, setProtectedPages] = useState<WikiPage[]>([]);
+  const [protectionLogs, setProtectionLogs] = useState<PageProtectionLogEntry[]>([]);
+  const [allPages, setAllPages] = useState<WikiPage[]>([]);
+  const [selectedPageForProtection, setSelectedPageForProtection] = useState<WikiPage | null>(null);
+  const [pageToProtectQuery, setPageToProtectQuery] = useState<string>('');
 
   // Check effectively if user has bureaucrat rights
   const hasBureaucratAccess = isBureaucrat || demoBureaucratMode;
@@ -142,8 +152,17 @@ export const SpecialBureaucratAdmin: React.FC = () => {
       setLogs(entries);
     });
 
-    // Populate known users from pages and user rights
+    const unsubProtectedPages = subscribeToProtectedPages(pages => {
+      setProtectedPages(pages);
+    });
+
+    const unsubProtectionLogs = subscribeToPageProtectionLogs(entries => {
+      setProtectionLogs(entries);
+    });
+
+    // Populate all pages and known users
     getAllPagesList().then(pages => {
+      setAllPages(pages);
       const userMap = new Map<string, { uid: string; username: string; email?: string }>();
 
       // Known admin
@@ -169,6 +188,8 @@ export const SpecialBureaucratAdmin: React.FC = () => {
     return () => {
       unsubRights();
       unsubLogs();
+      unsubProtectedPages();
+      unsubProtectionLogs();
     };
   }, []);
 
@@ -375,6 +396,19 @@ export const SpecialBureaucratAdmin: React.FC = () => {
         >
           <UserCheck className="w-4 h-4" />
           <span>Atribuir e Gerenciar Direitos</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('protected_pages')}
+          className={`px-4 py-2 font-medium border-b-2 flex items-center gap-1.5 transition-colors ${
+            activeTab === 'protected_pages'
+              ? 'border-purple-600 text-purple-700 dark:text-purple-400 font-semibold bg-purple-50/50 dark:bg-purple-950/20'
+              : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+          }`}
+        >
+          <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+          <span>Páginas Protegidas ({protectedPages.length})</span>
         </button>
 
         <button
@@ -800,6 +834,248 @@ export const SpecialBureaucratAdmin: React.FC = () => {
             ))}
           </div>
         </div>
+      )}
+
+      {/* TAB 4: PROTECTED PAGES MANAGEMENT */}
+      {activeTab === 'protected_pages' && (
+        <div className="space-y-6 text-xs">
+          {/* Quick Page Protection Selector */}
+          <div className="p-4 bg-[#f8f9fa] dark:bg-gray-900 border border-[#a2a9b1] dark:border-gray-700 rounded shadow-2xs space-y-3">
+            <h2 className="font-serif font-bold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+              <span>Proteger uma página do wiki</span>
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 text-[11px]">
+              Selecione qualquer página do wiki para definir níveis de proteção (bloqueada, semiprotegida ou desprotegida).
+            </p>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[240px]">
+                <input
+                  type="text"
+                  placeholder="Buscar página por título ou slug..."
+                  value={pageToProtectQuery}
+                  onChange={e => setPageToProtectQuery(e.target.value)}
+                  className="w-full p-2 border border-[#a2a9b1] dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+
+              <select
+                onChange={e => {
+                  const targetSlug = e.target.value;
+                  const found = allPages.find(p => p.slug === targetSlug);
+                  if (found) setSelectedPageForProtection(found);
+                }}
+                defaultValue=""
+                className="p-2 border border-[#a2a9b1] dark:border-gray-700 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+              >
+                <option value="" disabled>
+                  Ou escolha na lista de páginas ({allPages.length})
+                </option>
+                {allPages.map(p => (
+                  <option key={p.slug} value={p.slug}>
+                    {p.title} ({p.slug})
+                  </option>
+                ))}
+              </select>
+
+              {pageToProtectQuery.trim() && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const q = pageToProtectQuery.trim().toLowerCase();
+                    const found = allPages.find(
+                      p => p.title.toLowerCase().includes(q) || p.slug.toLowerCase().includes(q)
+                    );
+                    if (found) {
+                      setSelectedPageForProtection(found);
+                    } else {
+                      alert(`Página "${pageToProtectQuery}" não encontrada no Firestore.`);
+                    }
+                  }}
+                  className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-medium cursor-pointer"
+                >
+                  Abrir proteção da página
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Currently Protected Pages Table */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between pb-1 border-b border-gray-200 dark:border-gray-800">
+              <h2 className="font-serif font-bold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                <Lock className="w-4 h-4 text-purple-600" />
+                <span>Páginas Atualmente Protegidas no Firestore ({protectedPages.length})</span>
+              </h2>
+              <span className="text-[11px] text-gray-500">
+                Sincronizadas em tempo real via Firestore
+              </span>
+            </div>
+
+            {protectedPages.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 border border-dashed border-gray-300 dark:border-gray-700 rounded">
+                Nenhuma página com proteção ativa encontrada no banco de dados.
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-[#a2a9b1] dark:border-gray-700 rounded bg-[#f8f9fa] dark:bg-gray-900">
+                <table className="wikitable w-full text-left">
+                  <thead>
+                    <tr className="bg-[#eaecf0] dark:bg-gray-800 border-b border-[#a2a9b1] dark:border-gray-700">
+                      <th className="p-2.5 font-semibold">Página</th>
+                      <th className="p-2.5 font-semibold">Nível de Proteção</th>
+                      <th className="p-2.5 font-semibold">Motivo</th>
+                      <th className="p-2.5 font-semibold">Definida por</th>
+                      <th className="p-2.5 font-semibold">Expiração</th>
+                      <th className="p-2.5 font-semibold text-right">Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                    {protectedPages.map(page => {
+                      const level = page.protectionLevel || (page.isLocked ? 'locked' : 'unprotected');
+                      return (
+                        <tr key={page.slug} className="hover:bg-white dark:hover:bg-gray-800/40">
+                          <td className="p-2.5 font-medium">
+                            <button
+                              type="button"
+                              onClick={() => navigateToPage(page.slug)}
+                              className="text-blue-600 dark:text-blue-400 hover:underline text-left cursor-pointer flex items-center gap-1"
+                            >
+                              <span>{page.title}</span>
+                              <ChevronRight className="w-3 h-3 text-gray-400" />
+                            </button>
+                            <span className="text-[10px] text-gray-500 font-mono block">
+                              {page.slug}
+                            </span>
+                          </td>
+                          <td className="p-2.5">
+                            {level === 'locked' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 border border-red-300 dark:border-red-800">
+                                <Lock className="w-3 h-3 text-red-600" />
+                                <span>Bloqueada (Total)</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                                <ShieldCheck className="w-3 h-3 text-amber-600" />
+                                <span>Semiprotegida</span>
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-2.5 text-gray-700 dark:text-gray-300 text-[11px] max-w-xs">
+                            {page.protectionReason || 'Sem motivo registrado'}
+                          </td>
+                          <td className="p-2.5 text-gray-600 dark:text-gray-400 text-[11px]">
+                            {page.protectedBy || 'Administrador'}
+                          </td>
+                          <td className="p-2.5 text-gray-600 dark:text-gray-400 text-[11px]">
+                            {page.protectionExpiry && page.protectionExpiry !== 'infinity'
+                              ? new Date(page.protectionExpiry).toLocaleDateString('pt-BR')
+                              : 'Permanente'}
+                          </td>
+                          <td className="p-2.5 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPageForProtection(page)}
+                              className="px-2.5 py-1 text-xs bg-purple-50 dark:bg-purple-950 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded hover:bg-purple-100 font-medium cursor-pointer"
+                            >
+                              Alterar nível
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Protection Audit Logs Table */}
+          <div className="space-y-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+            <div className="flex items-center justify-between pb-1 border-b border-gray-200 dark:border-gray-800">
+              <h2 className="font-serif font-bold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                <History className="w-4 h-4 text-purple-600" />
+                <span>Registo de Auditoria de Proteções ({protectionLogs.length})</span>
+              </h2>
+            </div>
+
+            {protectionLogs.length === 0 ? (
+              <div className="p-4 text-center text-gray-500 text-xs">
+                Nenhum registo de proteção gravado no Firestore ainda.
+              </div>
+            ) : (
+              <div className="overflow-x-auto border border-[#a2a9b1] dark:border-gray-700 rounded bg-[#f8f9fa] dark:bg-gray-900">
+                <table className="wikitable w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-[#eaecf0] dark:bg-gray-800 border-b border-[#a2a9b1] dark:border-gray-700">
+                      <th className="p-2 font-semibold">Data / Hora</th>
+                      <th className="p-2 font-semibold">Página</th>
+                      <th className="p-2 font-semibold">Ação</th>
+                      <th className="p-2 font-semibold">Nível Anterior → Novo Nível</th>
+                      <th className="p-2 font-semibold">Realizado por</th>
+                      <th className="p-2 font-semibold">Motivo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                    {protectionLogs.map(log => (
+                      <tr key={log.id || log.timestamp} className="hover:bg-white dark:hover:bg-gray-800/40">
+                        <td className="p-2 text-gray-500 text-[11px] whitespace-nowrap">
+                          {new Date(log.timestamp).toLocaleString('pt-BR')}
+                        </td>
+                        <td className="p-2 font-medium text-blue-600">
+                          <button
+                            type="button"
+                            onClick={() => navigateToPage(log.pageSlug)}
+                            className="hover:underline cursor-pointer"
+                          >
+                            {log.pageTitle}
+                          </button>
+                        </td>
+                        <td className="p-2 uppercase font-mono text-[10px]">
+                          <span
+                            className={`px-1.5 py-0.5 rounded font-bold ${
+                              log.action === 'protect'
+                                ? 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                                : log.action === 'unprotect'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                            }`}
+                          >
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="p-2 font-mono text-[11px]">
+                          <span>{log.previousLevel}</span>
+                          <span className="mx-1 text-gray-400">→</span>
+                          <span className="font-bold text-purple-600">{log.newLevel}</span>
+                        </td>
+                        <td className="p-2 text-gray-700 dark:text-gray-300">
+                          {log.performedBy}
+                        </td>
+                        <td className="p-2 text-gray-600 dark:text-gray-400 text-[11px]">
+                          {log.reason}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Page Protection Modal */}
+      {selectedPageForProtection && (
+        <PageProtectionModal
+          page={selectedPageForProtection}
+          isOpen={Boolean(selectedPageForProtection)}
+          onClose={() => setSelectedPageForProtection(null)}
+          onUpdated={() => {
+            // Re-fetch all pages
+            getAllPagesList().then(pages => setAllPages(pages));
+          }}
+        />
       )}
     </div>
   );
