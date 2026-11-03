@@ -15,6 +15,8 @@ import { SpecialRecentChanges } from './components/SpecialRecentChanges';
 import { SpecialAllPages } from './components/SpecialAllPages';
 import { SpecialVersion } from './components/SpecialVersion';
 import { SpecialGitHubSync } from './components/SpecialGitHubSync';
+import { SpecialBureaucratAdmin } from './components/SpecialBureaucratAdmin';
+import { SpecialExtensions } from './components/SpecialExtensions';
 import { LocalSettingsModal } from './components/LocalSettingsModal';
 import { subscribeToPage } from './services/wikiService';
 import { WikiPage } from './types/wiki';
@@ -70,8 +72,32 @@ function WikiMain() {
     if (currentSlug === 'Especial:Versão' || currentSlug === 'Special:Version') {
       return <SpecialVersion />;
     }
-    if (currentSlug === 'Especial:GitHubSync' || currentSlug === 'Special:GitHubSync') {
+    if (
+      currentSlug === 'Especial:GitHubSync' ||
+      currentSlug === 'Special:GitHubSync' ||
+      currentSlug === 'Especial:Atualizações' ||
+      currentSlug === 'Especial:Atualizacoes' ||
+      currentSlug === 'Especial:Updates' ||
+      currentSlug === 'Special:Updates'
+    ) {
       return <SpecialGitHubSync />;
+    }
+    if (
+      currentSlug === 'Especial:Permissões_de_usuário' ||
+      currentSlug === 'Especial:Permissoes_de_usuario' ||
+      currentSlug === 'Especial:Administração' ||
+      currentSlug === 'Especial:Administracao' ||
+      currentSlug === 'Special:UserRights' ||
+      currentSlug === 'Special:Bureaucrat'
+    ) {
+      return <SpecialBureaucratAdmin />;
+    }
+    if (
+      currentSlug === 'Especial:Extensões' ||
+      currentSlug === 'Especial:Extensoes' ||
+      currentSlug === 'Special:Extensions'
+    ) {
+      return <SpecialExtensions />;
     }
 
     // Standard wiki page tabs

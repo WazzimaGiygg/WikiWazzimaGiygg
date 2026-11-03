@@ -47,7 +47,7 @@ export const config: WikiSettings = {
   enableLivePreview: ${livePreview},
   defaultSkin: "${selectedSkin}",
   maxRecentChanges: 50,
-  repositoryUrl: "https://github.com/wikimedia/mediawiki"
+  repositoryUrl: "https://github.com/WazzimaGiygg/WikiWazzimaGiygg"
 };`;
 
   return (

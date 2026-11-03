@@ -21,7 +21,7 @@ export const INITIAL_PAGES: Record<string, WikiPage> = {
 | linguagem = TypeScript (anteriormente PHP)
 | banco_de_dados = Google Cloud Firestore (em tempo real)
 | licença = GPL v2.0+ / MIT
-| repositório = https://github.com/wikimedia/mediawiki
+| repositório = https://github.com/WazzimaGiygg/WikiWazzimaGiygg
 }}
 
 '''Bem-vindo(a) ao WikiWazzimaGiygg''', a plataforma wiki livre desenvolvida com a interface e experiência clássica do MediaWiki, adaptada para '''TypeScript''' e '''Google Cloud Firestore'''.

@@ -1,14 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '../services/firebase';
-import { WikiSkin, WikiSettings, WikiUser } from '../types/wiki';
+import { WikiSkin, WikiSettings, WikiUser, UserRightsRecord } from '../types/wiki';
 import {
   subscribeToAllPages,
   subscribeToWikiSettings,
   saveWikiSettingsToFirestore,
   seedInitialPagesIfNeeded,
   ensureUserPagesExist,
+  subscribeToUserRights,
+  DEFAULT_SUPER_ADMIN_EMAIL,
 } from '../services/wikiService';
+import { syncCodebaseExtensionsToFirestore } from '../services/extensionService';
 import { slugify } from '../core/parser';
 
 interface WikiContextType {
@@ -29,6 +32,7 @@ interface WikiContextType {
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   isRealtimeConnected: boolean;
+  isBureaucrat: boolean;
   userPageSlug?: string;
   userTalkSlug?: string;
 }
@@ -40,7 +44,7 @@ const DEFAULT_SETTINGS: WikiSettings = {
   enableLivePreview: true,
   defaultSkin: 'vector-modern',
   maxRecentChanges: 50,
-  repositoryUrl: 'https://github.com/wikimedia/mediawiki',
+  repositoryUrl: 'https://github.com/WazzimaGiygg/WikiWazzimaGiygg',
 };
 
 const WikiContext = createContext<WikiContextType | null>(null);
@@ -74,6 +78,7 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
   });
 
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  const [userRights, setUserRights] = useState<UserRightsRecord | null>(null);
   const [userPagesInfo, setUserPagesInfo] = useState<{
     userPageSlug: string;
     userTalkSlug: string;
@@ -110,9 +115,17 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
 
   // Listen for auth state and automatically ensure user page and user talk page exist in Firestore
   useEffect(() => {
+    let unsubRights: (() => void) | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, async user => {
       setFirebaseUser(user);
       if (user && !user.isAnonymous) {
+        // Subscribe to real-time rights for this user
+        if (unsubRights) unsubRights();
+        unsubRights = subscribeToUserRights(user.uid, rights => {
+          setUserRights(rights);
+        });
+
         try {
           const res = await ensureUserPagesExist({
             uid: user.uid,
@@ -124,15 +137,22 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
           console.warn('Could not auto-create user pages on login:', err);
         }
       } else {
+        if (unsubRights) unsubRights();
+        setUserRights(null);
         setUserPagesInfo(null);
       }
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribe();
+      if (unsubRights) unsubRights();
+    };
   }, []);
 
-  // REAL-TIME: Seed pages then listen to all pages collection
+  // REAL-TIME: Seed pages and sync codebase extensions to Firestore, then listen to all pages collection
   useEffect(() => {
     seedInitialPagesIfNeeded();
+    syncCodebaseExtensionsToFirestore();
 
     const unsubPages = subscribeToAllPages(pages => {
       const slugSet = new Set<string>();
@@ -223,10 +243,24 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const isSuperAdminEmail = Boolean(
+    firebaseUser?.email && firebaseUser.email.toLowerCase() === DEFAULT_SUPER_ADMIN_EMAIL.toLowerCase()
+  );
+
+  const rawGroups = userRights?.groups || [];
+  const assignedGroups = isSuperAdminEmail && !rawGroups.includes('burocrata')
+    ? (['burocrata', ...rawGroups] as typeof rawGroups)
+    : rawGroups;
+
+  const isBureaucrat = isSuperAdminEmail || assignedGroups.includes('burocrata');
+  const isAdmin = isBureaucrat || assignedGroups.includes('administrador');
+  const isBlocked = assignedGroups.includes('bloqueado');
+
   const currentUser: WikiUser = firebaseUser
     ? {
         uid: firebaseUser.uid,
         username: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Usuário MediaWiki',
+        email: firebaseUser.email || undefined,
         isAnonymous: false,
         avatarUrl: firebaseUser.photoURL || undefined,
         editCount: 1,
@@ -235,6 +269,10 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
         userTalkSlug: userPagesInfo?.userTalkSlug,
         userPageTitle: userPagesInfo?.userPageTitle,
         userTalkTitle: userPagesInfo?.userTalkTitle,
+        groups: assignedGroups,
+        isBureaucrat,
+        isAdmin,
+        isBlocked,
       }
     : {
         uid: `anon_${guestName}`,
@@ -242,6 +280,10 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
         isAnonymous: true,
         editCount: 0,
         joinedAt: new Date().toISOString(),
+        groups: [],
+        isBureaucrat: false,
+        isAdmin: false,
+        isBlocked: false,
       };
 
   return (
@@ -264,6 +306,7 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
         sidebarOpen,
         setSidebarOpen,
         isRealtimeConnected,
+        isBureaucrat,
         userPageSlug: userPagesInfo?.userPageSlug,
         userTalkSlug: userPagesInfo?.userTalkSlug,
       }}

@@ -76,10 +76,37 @@ service cloud.firestore {
       allow delete: if isSignedIn();
     }
 
+    function isValidExtension(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 200
+        && data.description is string && data.description.size() <= 2000;
+    }
+
     // Wiki settings configuration (authenticated only)
     match /wiki_settings/{settingId} {
       allow read: if true;
       allow create, update: if isSignedIn() && isValidSettings(request.resource.data);
+      allow delete: if isSignedIn();
+    }
+
+    // User roles / permissions
+    match /user_roles/{userId} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+
+    // Bureaucrat logs
+    match /bureaucrat_logs/{logId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // Wiki extensions (synchronized with codebase & Firestore, managed by bureaucrats)
+    match /wiki_extensions/{extensionId} {
+      allow read: if true;
+      allow create, update: if isSignedIn() && isValidExtension(request.resource.data);
       allow delete: if isSignedIn();
     }
 

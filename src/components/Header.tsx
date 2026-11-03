@@ -12,6 +12,7 @@ import {
   X,
   ExternalLink,
   BookOpen,
+  ShieldCheck,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import { searchWikiPages } from '../services/wikiService';
@@ -276,7 +277,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                {currentUser.isBureaucrat && (
+                  <button
+                    type="button"
+                    onClick={() => navigateToPage('Especial:Permissões_de_usuário')}
+                    className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-300 dark:border-purple-800 hover:bg-purple-200 transition-colors"
+                    title="Acessar painel de Burocrata (Special:UserRights)"
+                  >
+                    <ShieldCheck className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                    <span>Burocrata</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowUserMenu(prev => !prev)}
@@ -386,6 +398,20 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
                     className="text-left py-1 text-blue-600 dark:text-blue-400 hover:underline"
                   >
                     Suas contribuições
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigateToPage('Especial:Permissões_de_usuário');
+                      setShowUserMenu(false);
+                    }}
+                    className="text-left py-1 text-purple-600 dark:text-purple-400 hover:underline flex items-center justify-between font-medium pt-1 border-t border-gray-100 dark:border-gray-800"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      <span>Permissões de utilizador</span>
+                    </span>
+                    <span className="text-[10px] text-purple-500 font-mono">Burocrata</span>
                   </button>
                 </div>
               </div>

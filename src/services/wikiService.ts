@@ -12,13 +12,27 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { WikiPage, PageRevision, RecentChange, PageNamespace, TalkComment, WikiSettings } from '../types/wiki';
+import {
+  WikiPage,
+  PageRevision,
+  RecentChange,
+  PageNamespace,
+  TalkComment,
+  WikiSettings,
+  UserGroup,
+  UserRightsRecord,
+  BureaucratLogEntry,
+  WikiUser,
+} from '../types/wiki';
 import { INITIAL_PAGES } from '../core/defaultPages';
 import { slugify } from '../core/parser';
 
 const WIKI_PAGES_COLLECTION = 'wiki_pages';
 const RECENT_CHANGES_COLLECTION = 'recent_changes';
 const WIKI_SETTINGS_COLLECTION = 'wiki_settings';
+const USER_ROLES_COLLECTION = 'user_roles';
+const BUREAUCRAT_LOGS_COLLECTION = 'bureaucrat_logs';
+export const DEFAULT_SUPER_ADMIN_EMAIL = 'pedrohenriquecardonaperes@gmail.com';
 
 let isSeeding = false;
 
@@ -645,3 +659,136 @@ Olá, '''${userName}'''! Seja muito bem-vindo(a) à comunidade WikiWazzimaGiygg.
     namespace: 'Talk',
   });
 }
+
+// 7. BUREAUCRAT PERMISSIONS & AUDIT LOGS
+
+export function isUserBureaucrat(user?: { email?: string | null; groups?: UserGroup[] } | null): boolean {
+  if (!user) return false;
+  if (user.email && user.email.toLowerCase() === DEFAULT_SUPER_ADMIN_EMAIL.toLowerCase()) {
+    return true;
+  }
+  return Boolean(user.groups?.includes('burocrata'));
+}
+
+export async function getUserRights(uid: string): Promise<UserRightsRecord | null> {
+  try {
+    const docRef = doc(db, USER_ROLES_COLLECTION, uid);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return snap.data() as UserRightsRecord;
+    }
+  } catch (error) {
+    console.warn(`Firestore getUserRights error for ${uid}:`, error);
+  }
+  return null;
+}
+
+export function subscribeToUserRights(
+  uid: string,
+  callback: (record: UserRightsRecord | null) => void
+): Unsubscribe {
+  const docRef = doc(db, USER_ROLES_COLLECTION, uid);
+  return onSnapshot(
+    docRef,
+    snapshot => {
+      if (snapshot.exists()) {
+        callback(snapshot.data() as UserRightsRecord);
+      } else {
+        callback(null);
+      }
+    },
+    error => {
+      console.warn(`Firestore onSnapshot error for user rights ${uid}:`, error);
+      callback(null);
+    }
+  );
+}
+
+export function subscribeToAllUserRights(
+  callback: (records: UserRightsRecord[]) => void
+): Unsubscribe {
+  const colRef = collection(db, USER_ROLES_COLLECTION);
+  return onSnapshot(
+    colRef,
+    snapshot => {
+      const records: UserRightsRecord[] = [];
+      snapshot.forEach(docSnap => {
+        records.push(docSnap.data() as UserRightsRecord);
+      });
+      records.sort((a, b) => a.username.localeCompare(b.username));
+      callback(records);
+    },
+    error => {
+      console.warn('Firestore onSnapshot error for all user rights:', error);
+      callback([]);
+    }
+  );
+}
+
+export function subscribeToBureaucratLogs(
+  callback: (logs: BureaucratLogEntry[]) => void,
+  maxCount = 50
+): Unsubscribe {
+  const colRef = collection(db, BUREAUCRAT_LOGS_COLLECTION);
+  const q = query(colRef, orderBy('timestamp', 'desc'), limit(maxCount));
+
+  return onSnapshot(
+    q,
+    snapshot => {
+      const logs: BureaucratLogEntry[] = [];
+      snapshot.forEach(docSnap => {
+        logs.push({ id: docSnap.id, ...docSnap.data() } as BureaucratLogEntry);
+      });
+      callback(logs);
+    },
+    error => {
+      console.warn('Firestore onSnapshot error for bureaucrat logs:', error);
+      callback([]);
+    }
+  );
+}
+
+export async function saveUserRights(params: {
+  bureaucrat: { uid: string; username: string };
+  targetUid: string;
+  targetName: string;
+  targetEmail?: string;
+  newGroups: UserGroup[];
+  previousGroups: UserGroup[];
+  reason: string;
+  expiry?: string;
+}): Promise<void> {
+  const now = new Date().toISOString();
+  const added = params.newGroups.filter(g => !params.previousGroups.includes(g));
+  const removed = params.previousGroups.filter(g => !params.newGroups.includes(g));
+
+  const rightsRecord: UserRightsRecord = {
+    uid: params.targetUid,
+    username: params.targetName,
+    email: params.targetEmail,
+    groups: params.newGroups,
+    updatedAt: now,
+    updatedBy: params.bureaucrat.username,
+    updatedByUid: params.bureaucrat.uid,
+  };
+
+  const logEntry: BureaucratLogEntry = {
+    timestamp: now,
+    bureaucratUid: params.bureaucrat.uid,
+    bureaucratName: params.bureaucrat.username,
+    targetUid: params.targetUid,
+    targetName: params.targetName,
+    addedGroups: added,
+    removedGroups: removed,
+    reason: params.reason.trim() || 'Nenhum motivo fornecido',
+    expiry: params.expiry || 'Indefinido',
+  };
+
+  try {
+    await setDoc(doc(db, USER_ROLES_COLLECTION, params.targetUid), rightsRecord);
+    await addDoc(collection(db, BUREAUCRAT_LOGS_COLLECTION), logEntry);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `${USER_ROLES_COLLECTION}/${params.targetUid}`);
+  }
+}
+

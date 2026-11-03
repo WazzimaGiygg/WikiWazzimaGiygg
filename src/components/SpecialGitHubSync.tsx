@@ -7,17 +7,20 @@ import {
   GitCommit,
   CheckCircle,
   FileCode,
-  Layers,
   ArrowRight,
   LogIn,
+  Layers,
+  Sparkles,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import {
-  fetchWikimediaRepoInfo,
+  fetchWikiRepoInfo,
   fetchRecentCommits,
   fetchRepoReadme,
   GitHubRepoInfo,
   GitHubCommit,
+  OFFICIAL_REPO_NAME,
+  OFFICIAL_REPO_URL,
 } from '../services/githubService';
 import { savePage } from '../services/wikiService';
 
@@ -36,7 +39,7 @@ export const SpecialGitHubSync: React.FC = () => {
     setSyncStatus(null);
     try {
       const [info, commitList, rawReadme] = await Promise.all([
-        fetchWikimediaRepoInfo(),
+        fetchWikiRepoInfo(),
         fetchRecentCommits(),
         fetchRepoReadme(),
       ]);
@@ -67,15 +70,14 @@ export const SpecialGitHubSync: React.FC = () => {
     try {
       // Build updated wikitext reflecting live GitHub data
       const commitListWikitext = commits
-        .slice(0, 5)
-        .map(
-          c =>
-            `* \`[https://github.com/wikimedia/mediawiki/commit/${c.sha} ${c.sha}]\` - '''${c.commit.author.name}''': ${c.commit.message.replace(/\|/g, '-')} (${new Date(c.commit.author.date).toLocaleDateString('pt-BR')})`
-        )
+        .map(c => {
+          const firstLine = c.commit.message.split('\n')[0].replace(/\|/g, '-');
+          return `* \`[${c.html_url} ${c.sha}]\` - '''${c.commit.author.name}''': ${firstLine} (${new Date(c.commit.author.date).toLocaleDateString('pt-BR')})`;
+        })
         .join('\n');
 
       const wikitext = `{{Infobox software
-| nome = Repositório Upstream MediaWiki
+| nome = Repositório Oficial WikiWazzimaGiygg
 | url = ${repoInfo.html_url}
 | estrelas = ${repoInfo.stargazers_count}
 | forks = ${repoInfo.forks_count}
@@ -85,43 +87,40 @@ export const SpecialGitHubSync: React.FC = () => {
 | sincronizado_em = ${new Date().toLocaleString('pt-BR')}
 }}
 
-Este artigo reúne informações sincronizadas em tempo real a partir do repositório upstream no GitHub: '''[${repoInfo.html_url} wikimedia/mediawiki]'''.
+Este artigo reúne os dados e atualizações sincronizados em tempo real a partir do repositório oficial no GitHub: '''[${repoInfo.html_url} ${OFFICIAL_REPO_NAME}]'''.
 
 == Descrição Oficial ==
 ${repoInfo.description}
 
-== Estatísticas do Upstream ==
+== Estatísticas do Repositório ==
+* '''Repositório Oficial:''' [${repoInfo.html_url} ${repoInfo.full_name}]
 * '''Estrelas no GitHub:''' ${repoInfo.stargazers_count}
 * '''Forks da Comunidade:''' ${repoInfo.forks_count}
-* '''Issues / Tickets Abertos:''' ${repoInfo.open_issues_count}
+* '''Issues / Problemas Abertos:''' ${repoInfo.open_issues_count}
 * '''Branch Principal:''' \`${repoInfo.default_branch}\`
-* '''Última Atualização no Upstream:''' ${new Date(repoInfo.updated_at).toLocaleDateString('pt-BR')}
+* '''Último Push no GitHub:''' ${repoInfo.pushed_at ? new Date(repoInfo.pushed_at).toLocaleString('pt-BR') : 'Recente'}
 
-== Commits Recentes no Upstream ==
+== Histórico de Commits e Atualizações Recentes ==
 ${commitListWikitext}
 
-== README.md do Repositório ==
-<syntaxhighlight lang="markdown">
-${readme.slice(0, 2000)}
-</syntaxhighlight>
-
-== Comparativo com o WikiWazzimaGiygg ==
-No WikiWazzimaGiygg, a engine foi portada para TypeScript e Google Cloud Firestore. Consulte [[Arquitetura_WikiWazzimaGiygg]] para mais detalhes.
+== Arquitetura e Estrutura ==
+O '''WikiWazzimaGiygg''' foi desenvolvido em TypeScript e executa sobre o Google Cloud Firestore em tempo real. Todas as páginas, discussões e extensões dinâmicas são sincronizadas diretamente com as coleções do Firestore.
 
 [[Categoria:Git]]
-[[Categoria:Código Fonte]]`;
+[[Categoria:Código Fonte]]
+[[Categoria:WikiWazzimaGiygg]]`;
 
       await savePage({
-        slug: 'Repositório_GitHub_Wikimedia',
-        title: 'Repositório GitHub Wikimedia',
+        slug: 'Repositório_GitHub_WikiWazzimaGiygg',
+        title: 'Repositório GitHub WikiWazzimaGiygg',
         content: wikitext,
-        summary: `Sincronização automática com ${repoInfo.html_url} (${commits.length} commits importados)`,
+        summary: `Sincronização de commits e metadados de ${repoInfo.html_url} (${commits.length} commits importados)`,
         author: currentUser.username,
         authorId: currentUser.uid,
         minorEdit: false,
       });
 
-      setSyncStatus('Artigo "Repositório GitHub Wikimedia" atualizado com sucesso no Firestore!');
+      setSyncStatus('Artigo "Repositório GitHub WikiWazzimaGiygg" atualizado com sucesso no Firestore!');
     } catch (err: any) {
       console.error('Error syncing:', err);
       setSyncStatus('Erro ao sincronizar com Firestore: ' + (err.message || String(err)));
@@ -137,7 +136,7 @@ No WikiWazzimaGiygg, a engine foi portada para TypeScript e Google Cloud Firesto
         <h1 className="text-2xl font-serif text-gray-900 dark:text-gray-100 flex items-center justify-between">
           <span className="flex items-center gap-2">
             <GitBranch className="w-6 h-6 text-blue-600" />
-            <span>Sincronizador GitHub: wikimedia/mediawiki</span>
+            <span>Updates do Repositório: {OFFICIAL_REPO_NAME}</span>
           </span>
           <button
             type="button"
@@ -146,11 +145,20 @@ No WikiWazzimaGiygg, a engine foi portada para TypeScript e Google Cloud Firesto
             className="text-xs font-sans text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-            <span>Recarregar API</span>
+            <span>Recarregar GitHub API</span>
           </button>
         </h1>
         <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
-          Integração oficial com a API do GitHub para consultar e importar metadados de <a href="https://github.com/wikimedia/mediawiki" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">github.com/wikimedia/mediawiki</a> para este wiki.
+          Histórico de atualizações e sincronização de commits oficiais de{' '}
+          <a
+            href={OFFICIAL_REPO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:underline font-semibold"
+          >
+            {OFFICIAL_REPO_URL}
+          </a>
+          .
         </div>
       </div>
 
@@ -162,10 +170,10 @@ No WikiWazzimaGiygg, a engine foi portada para TypeScript e Google Cloud Firesto
           </div>
           <button
             type="button"
-            onClick={() => navigateToPage('Repositório_GitHub_Wikimedia')}
-            className="font-semibold underline hover:text-emerald-900 flex items-center gap-1"
+            onClick={() => navigateToPage('Repositório_GitHub_WikiWazzimaGiygg')}
+            className="font-semibold underline hover:text-emerald-900 flex items-center gap-1 cursor-pointer"
           >
-            <span>Ver artigo</span>
+            <span>Ver artigo no Wiki</span>
             <ArrowRight className="w-3 h-3" />
           </button>
         </div>
@@ -174,7 +182,7 @@ No WikiWazzimaGiygg, a engine foi portada para TypeScript e Google Cloud Firesto
       {loading ? (
         <div className="py-16 text-center text-xs text-gray-500 flex flex-col items-center justify-center gap-2">
           <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />
-          <span>Consultando API do GitHub para wikimedia/mediawiki...</span>
+          <span>Consultando API do GitHub para {OFFICIAL_REPO_NAME}...</span>
         </div>
       ) : (
         <div className="space-y-6 text-xs">
@@ -228,19 +236,19 @@ No WikiWazzimaGiygg, a engine foi portada para TypeScript e Google Cloud Firesto
                 <div className="p-2.5 bg-gray-50 dark:bg-gray-800 rounded">
                   <div className="text-[10px] text-gray-500 uppercase font-semibold">Estrelas</div>
                   <div className="text-base font-bold text-gray-900 dark:text-gray-100">
-                    {repoInfo.stargazers_count.toLocaleString()}
+                    {repoInfo.stargazers_count}
                   </div>
                 </div>
 
                 <div className="p-2.5 bg-gray-50 dark:bg-gray-800 rounded">
                   <div className="text-[10px] text-gray-500 uppercase font-semibold">Forks</div>
                   <div className="text-base font-bold text-gray-900 dark:text-gray-100">
-                    {repoInfo.forks_count.toLocaleString()}
+                    {repoInfo.forks_count}
                   </div>
                 </div>
 
                 <div className="p-2.5 bg-gray-50 dark:bg-gray-800 rounded">
-                  <div className="text-[10px] text-gray-500 uppercase font-semibold">Branch Padrão</div>
+                  <div className="text-[10px] text-gray-500 uppercase font-semibold">Branch Principal</div>
                   <div className="text-base font-bold font-mono text-gray-900 dark:text-gray-100">
                     {repoInfo.default_branch}
                   </div>
@@ -258,59 +266,85 @@ No WikiWazzimaGiygg, a engine foi portada para TypeScript e Google Cloud Firesto
 
           {/* Commits List */}
           <div>
-            <h2 className="font-serif font-bold text-sm text-gray-900 dark:text-gray-100 pb-1 mb-2 border-b border-gray-200 dark:border-gray-800 flex items-center gap-1.5">
-              <GitCommit className="w-4 h-4 text-blue-600" />
-              <span>Commits Recentes do Repositório Upstream</span>
-            </h2>
+            <div className="flex items-center justify-between pb-1 mb-2 border-b border-gray-200 dark:border-gray-800">
+              <h2 className="font-serif font-bold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-1.5">
+                <GitCommit className="w-4 h-4 text-blue-600" />
+                <span>Atualizações e Commits Recentes ({commits.length})</span>
+              </h2>
+              <span className="text-[11px] text-gray-500">
+                Sincronizado diretamente de {OFFICIAL_REPO_NAME}
+              </span>
+            </div>
 
             <div className="border border-[#a2a9b1] dark:border-gray-700 rounded bg-[#f8f9fa] dark:bg-gray-900 overflow-hidden">
               <ul className="divide-y divide-gray-200 dark:divide-gray-800">
-                {commits.map(commit => (
-                  <li
-                    key={commit.sha}
-                    className="p-3 hover:bg-white dark:hover:bg-gray-800/60 flex flex-wrap items-center justify-between gap-2"
-                  >
-                    <div className="flex items-start gap-2 max-w-xl">
-                      <span className="font-mono text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded shrink-0">
-                        {commit.sha}
-                      </span>
-                      <div>
-                        <div className="font-semibold text-gray-800 dark:text-gray-200">
-                          {commit.commit.message}
-                        </div>
-                        <div className="text-[11px] text-gray-500">
-                          Por <span className="font-medium">{commit.commit.author.name}</span> em{' '}
-                          {new Date(commit.commit.author.date).toLocaleDateString('pt-BR', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
+                {commits.map(commit => {
+                  const [firstLine, ...rest] = commit.commit.message.split('\n');
+                  return (
+                    <li
+                      key={commit.sha}
+                      className="p-3.5 hover:bg-white dark:hover:bg-gray-800/60 flex flex-wrap items-start justify-between gap-3 transition-colors"
+                    >
+                      <div className="flex items-start gap-3 max-w-2xl">
+                        {commit.author?.avatar_url ? (
+                          <img
+                            src={commit.author.avatar_url}
+                            alt={commit.commit.author.name}
+                            className="w-8 h-8 rounded-full border border-gray-300 dark:border-gray-700 shrink-0 mt-0.5"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 flex items-center justify-center text-xs font-bold shrink-0 mt-0.5">
+                            {commit.commit.author.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-900">
+                              {commit.sha}
+                            </span>
+                            <span className="font-semibold text-gray-900 dark:text-gray-100">
+                              {firstLine}
+                            </span>
+                          </div>
+                          {rest.length > 0 && rest.join('\n').trim() && (
+                            <p className="text-[11px] text-gray-600 dark:text-gray-400 mt-1.5 whitespace-pre-line bg-gray-50 dark:bg-gray-800/70 p-2 rounded border border-gray-200 dark:border-gray-700 font-sans">
+                              {rest.join('\n').trim()}
+                            </p>
+                          )}
+                          <div className="text-[11px] text-gray-500 mt-1.5">
+                            Por <span className="font-semibold text-gray-700 dark:text-gray-300">{commit.commit.author.name}</span> em{' '}
+                            {new Date(commit.commit.author.date).toLocaleDateString('pt-BR', {
+                              day: '2-digit',
+                              month: 'long',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <a
-                      href={commit.html_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-gray-500 hover:text-blue-600 flex items-center gap-1"
-                    >
-                      <span className="text-[11px]">Ver no GitHub</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </li>
-                ))}
+                      <a
+                        href={commit.html_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-semibold shrink-0"
+                      >
+                        <span>Ver no GitHub</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           </div>
 
-          {/* Upstream README.md viewer */}
+          {/* Repo README.md viewer */}
           <div>
             <h2 className="font-serif font-bold text-sm text-gray-900 dark:text-gray-100 pb-1 mb-2 border-b border-gray-200 dark:border-gray-800 flex items-center gap-1.5">
               <FileCode className="w-4 h-4 text-blue-600" />
-              <span>README.md Original do Repositório</span>
+              <span>Visão Geral do Repositório ({OFFICIAL_REPO_NAME})</span>
             </h2>
 
             <pre className="p-3 bg-gray-900 text-gray-100 rounded text-xs font-mono overflow-x-auto max-h-80 leading-relaxed border border-gray-700">

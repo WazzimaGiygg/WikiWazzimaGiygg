@@ -14,6 +14,8 @@ import {
   Share2,
   List,
   Info,
+  ShieldCheck,
+  Blocks,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import { getRandomPageSlug } from '../utils/randomPage';
@@ -23,7 +25,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
-  const { currentSlug, navigateToPage, sidebarOpen, setSidebarOpen, settings } = useWiki();
+  const { currentSlug, navigateToPage, sidebarOpen, setSidebarOpen, settings, isBureaucrat } = useWiki();
 
   const handleRandomPage = async () => {
     const slug = await getRandomPageSlug();
@@ -45,11 +47,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
   ];
 
   const repoLinks = [
-    { label: 'Sincronizar Repositório', slug: 'Especial:GitHubSync', icon: Database },
+    { label: 'Updates do GitHub', slug: 'Especial:GitHubSync', icon: GitBranch },
   ];
 
   const toolLinks = [
     { label: 'Versão do Software', slug: 'Especial:Versão', icon: Info },
+    { label: 'Extensões do Wiki', slug: 'Especial:Extensões', icon: Blocks },
     { label: 'Configurações ($wg)', action: onOpenSettings, icon: Settings },
     { label: 'Versão para impressão', action: () => window.print(), icon: Share2 },
   ];
@@ -172,7 +175,42 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
           </ul>
         </div>
 
-        {/* Section 4: Ferramentas */}
+        {/* Section 4: Administração */}
+        <div>
+          <div className="flex items-center justify-between mb-2 px-2">
+            <h3 className="font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-[10px]">
+              Administração
+            </h3>
+            {isBureaucrat && (
+              <span className="px-1.5 py-0.5 text-[9px] font-bold rounded bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
+                Burocrata
+              </span>
+            )}
+          </div>
+          <ul className="space-y-0.5">
+            <li>
+              <button
+                type="button"
+                onClick={() => navigateToPage('Especial:Permissões_de_usuário')}
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded transition-colors text-left cursor-pointer ${
+                  currentSlug === 'Especial:Permissões_de_usuário' || currentSlug === 'Special:UserRights'
+                    ? 'bg-[#3366cc]/10 text-[#0645ad] dark:text-[#6ba4ff] font-semibold border-l-3 border-[#3366cc]'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span>Permissões de usuário</span>
+                </div>
+                {isBureaucrat && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-600 animate-pulse" />
+                )}
+              </button>
+            </li>
+          </ul>
+        </div>
+
+        {/* Section 5: Ferramentas */}
         <div>
           <h3 className="font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-[10px] mb-2 px-2">
             Ferramentas

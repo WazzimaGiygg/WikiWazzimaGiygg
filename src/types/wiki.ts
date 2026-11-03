@@ -64,6 +64,7 @@ export interface TalkComment {
 export interface WikiUser {
   uid: string;
   username: string;
+  email?: string;
   isAnonymous: boolean;
   avatarUrl?: string;
   editCount: number;
@@ -72,6 +73,58 @@ export interface WikiUser {
   userTalkSlug?: string;
   userPageTitle?: string;
   userTalkTitle?: string;
+  groups?: UserGroup[];
+  isBureaucrat?: boolean;
+  isAdmin?: boolean;
+  isBlocked?: boolean;
+}
+
+export type UserGroup =
+  | 'burocrata'
+  | 'administrador'
+  | 'eliminador'
+  | 'reversor'
+  | 'autorrevisor'
+  | 'bot'
+  | 'confirmado'
+  | 'bloqueado';
+
+export interface UserRightsRecord {
+  uid: string;
+  username: string;
+  email?: string;
+  groups: UserGroup[];
+  updatedAt: string;
+  updatedBy: string;
+  updatedByUid: string;
+}
+
+export interface BureaucratLogEntry {
+  id?: string;
+  timestamp: string;
+  bureaucratUid: string;
+  bureaucratName: string;
+  targetUid: string;
+  targetName: string;
+  addedGroups: UserGroup[];
+  removedGroups: UserGroup[];
+  reason: string;
+  expiry: string;
+}
+
+export interface WikiExtensionInfo {
+  id: string;
+  name: string;
+  category: 'parser' | 'media' | 'admin' | 'skin' | 'api';
+  version: string;
+  authors: string[];
+  description: string;
+  url: string;
+  gitTag?: string;
+  license: string;
+  hooks: string[];
+  exampleWikitext?: string;
+  isActive: boolean;
 }
 
 export interface TOCItem {
