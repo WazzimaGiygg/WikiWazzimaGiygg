@@ -145,6 +145,13 @@ service cloud.firestore {
       allow delete: if isSignedIn();
     }
 
+    // Wiki files and uploaded images (requires signed in)
+    match /wiki_files/{fileId} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
+
     // Default deny
     match /{document=**} {
       allow read, write: if false;

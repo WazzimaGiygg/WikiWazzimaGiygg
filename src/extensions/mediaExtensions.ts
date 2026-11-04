@@ -31,3 +31,25 @@ export const wikiEditorExtension: ExtensionDefinition = {
   defaultActive: true,
   installedVia: 'code',
 };
+
+export const uploadWizardExtension: ExtensionDefinition = {
+  id: 'upload-wizard',
+  name: 'UploadWizard',
+  category: 'media',
+  version: '2.1.0-ts',
+  authors: ['Neil Kandalgaonkar', 'Mark Holmquist', 'Equipe WikiWazzimaGiygg'],
+  description: 'Assistente oficial de envio de arquivos e upload de imagens para a wiki. Suporta armazenamento em nuvem e requer o Plano Blaze ativo para transferências.',
+  url: 'https://www.mediawiki.org/wiki/Extension:UploadWizard',
+  gitTag: 'REL1_42-ts',
+  license: 'GPL-2.0-or-later',
+  hooks: ['UploadComplete', 'BeforePageDisplay', 'SpecialUpload::execute'],
+  exampleWikitext: '[[Ficheiro:Exemplo_logo.png|thumb|Legenda da imagem carregada na wiki]]',
+  defaultActive: true,
+  installedVia: 'code',
+  config: {
+    blazePlanEnabled: false,
+    maxUploadSizeMB: 10,
+    allowedFormats: ['png', 'jpg', 'jpeg', 'svg', 'gif', 'webp'],
+  },
+};
+

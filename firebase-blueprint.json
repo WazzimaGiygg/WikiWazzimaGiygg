@@ -7,6 +7,7 @@
       "properties": {
         "slug": { "type": "string", "maxLength": 200, "pattern": "^[a-zA-Z0-9_:.-]+$" },
         "title": { "type": "string", "maxLength": 250 },
+        "titleLower": { "type": "string", "maxLength": 250 },
         "namespace": { "type": "string", "maxLength": 50 },
         "content": { "type": "string", "maxLength": 500000 },
         "summary": { "type": "string", "maxLength": 500 },
@@ -212,6 +213,27 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["reportedUser", "reporterUser", "category", "description", "status", "createdAt"]
+    },
+    "WikiFile": {
+      "title": "WikiFile",
+      "description": "Uploaded image or media file in the wiki, conditioned on Blaze Plan enablement in extensions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 200 },
+        "title": { "type": "string", "maxLength": 250 },
+        "fileName": { "type": "string", "maxLength": 200 },
+        "url": { "type": "string" },
+        "mimeType": { "type": "string", "maxLength": 100 },
+        "size": { "type": "number" },
+        "uploadedBy": { "type": "string", "maxLength": 100 },
+        "uploadedByUid": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "license": { "type": "string", "maxLength": 100 },
+        "timestamp": { "type": "string" },
+        "width": { "type": "number" },
+        "height": { "type": "number" }
+      },
+      "required": ["id", "title", "fileName", "url", "mimeType", "size", "uploadedBy", "timestamp"]
     }
   },
   "firestore": {
@@ -258,6 +280,10 @@
     "/ucoc_reports/{reportId}": {
       "schema": { "$ref": "#/entities/UCoCReport" },
       "description": "Universal Code of Conduct violations and resolutions"
+    },
+    "/wiki_files/{fileId}": {
+      "schema": { "$ref": "#/entities/WikiFile" },
+      "description": "Stores uploaded wiki files and media images with metadata and storage URLs"
     }
   }
 }

@@ -1,4 +1,5 @@
 import { TOCItem } from '../types/wiki';
+import { getCachedFileUrl } from '../services/extensionService';
 
 export interface ParseResult {
   html: string;
@@ -208,11 +209,74 @@ function parseInlineWikitext(input: string, existingPages: Set<string>): string 
   // Underline: <u>text</u>
   text = text.replace(/<u>(.*?)<\/u>/gi, '<u class="underline">$1</u>');
 
-  // Internal Links: [[Target]] or [[Target|Label]]
-  text = text.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, customLabel) => {
+  // Internal Links & Media: [[Target]] or [[Target|Label]] or [[Ficheiro:...|thumb|...]]
+  text = text.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, rawParams) => {
     const rawTarget = target.trim();
+
+    // Check for MediaWiki media syntax: Ficheiro:, File:, Imagem:, Image:
+    const mediaMatch = rawTarget.match(/^(?:Ficheiro|File|Imagem|Image):(.*)$/i);
+    if (mediaMatch) {
+      const fileName = mediaMatch[1].trim();
+      const cleanFileName = fileName.replace(/\s+/g, '_');
+      const fileTargetSlug = `Ficheiro:${cleanFileName}`;
+
+      const paramsList = rawParams ? rawParams.split('|').map((p: string) => p.trim()) : [];
+      let align = 'right';
+      let widthStr = '';
+      let caption = '';
+
+      paramsList.forEach((param: string) => {
+        const lower = param.toLowerCase();
+        if (lower === 'thumb' || lower === 'thumbnail' || lower === 'quadro') {
+          // default thumb behavior
+        } else if (lower === 'left' || lower === 'esquerda') {
+          align = 'left';
+        } else if (lower === 'right' || lower === 'direita') {
+          align = 'right';
+        } else if (lower === 'center' || lower === 'centro') {
+          align = 'center';
+        } else if (lower === 'none' || lower === 'nenhum') {
+          align = 'none';
+        } else if (/^\d+px$/.test(lower)) {
+          widthStr = lower;
+        } else {
+          caption = param;
+        }
+      });
+
+      // Resolve image source: cached data URL, http URL, assets path, or fallback
+      let imgSrc = getCachedFileUrl(cleanFileName) || getCachedFileUrl(fileTargetSlug) || '';
+      if (!imgSrc) {
+        if (/^(https?:|\/\/|data:)/.test(fileName)) {
+          imgSrc = fileName;
+        } else if (fileName.includes('image_19fe7a14')) {
+          imgSrc = '/assets/aistudio/image_19fe7a14.png';
+        } else {
+          imgSrc = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="300" height="200" fill="%23f1f3f5"/><text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="14" fill="%236c757d">📁 ${encodeURIComponent(cleanFileName)}</text><text x="50%" y="65%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="11" fill="%23adb5bd">Clique para detalhes do ficheiro</text></svg>`;
+        }
+      }
+
+      const alignClasses =
+        align === 'left'
+          ? 'md:float-left md:mr-4 mr-auto ml-0 clear-left'
+          : align === 'center'
+          ? 'mx-auto clear-both block text-center'
+          : align === 'none'
+          ? 'inline-block align-top my-1'
+          : 'md:float-right md:ml-4 ml-auto mr-0 clear-right';
+
+      const widthStyle = widthStr ? `style="max-width: ${widthStr};"` : 'style="max-width: 320px;"';
+
+      return `<figure class="mw-halign-${align} mw-image-thumb border border-[#a2a9b1] dark:border-gray-700 bg-[#f8f9fa] dark:bg-gray-800 p-1.5 rounded my-3 ${alignClasses}" ${widthStyle}>
+        <a href="#/wiki/${encodeURIComponent(fileTargetSlug)}" class="block overflow-hidden rounded bg-white dark:bg-black/30 text-center cursor-pointer group" title="${escapeHtml(caption || fileName)}">
+          <img src="${imgSrc}" alt="${escapeHtml(caption || fileName)}" class="mx-auto h-auto object-contain max-h-80 w-auto rounded group-hover:opacity-95 transition-opacity" />
+        </a>
+        ${caption ? `<figcaption class="text-xs text-gray-600 dark:text-gray-300 mt-1.5 px-1 leading-snug text-left">${escapeHtml(caption)}</figcaption>` : ''}
+      </figure>`;
+    }
+
     const cleanTarget = rawTarget.replace(/\s+/g, '_');
-    const label = customLabel ? customLabel.trim() : rawTarget;
+    const label = rawParams ? rawParams.trim() : rawTarget;
 
     // Check if target page exists (or default page)
     const pageExists = existingPages.has(cleanTarget) || existingPages.has(rawTarget);

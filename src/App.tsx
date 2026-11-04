@@ -17,6 +17,7 @@ import { SpecialVersion } from './components/SpecialVersion';
 import { SpecialGitHubSync } from './components/SpecialGitHubSync';
 import { SpecialBureaucratAdmin } from './components/SpecialBureaucratAdmin';
 import { SpecialExtensions } from './components/SpecialExtensions';
+import { SpecialUpload } from './components/SpecialUpload';
 import { LocalSettingsModal } from './components/LocalSettingsModal';
 import { subscribeToPage } from './services/wikiService';
 import { WikiPage } from './types/wiki';
@@ -140,6 +141,14 @@ function WikiMain() {
       currentSlug === 'Special:Extensions'
     ) {
       return <SpecialExtensions />;
+    }
+    if (
+      currentSlug === 'Especial:Carregar_arquivo' ||
+      currentSlug === 'Especial:Carregar_ficheiro' ||
+      currentSlug === 'Especial:Upload' ||
+      currentSlug === 'Special:Upload'
+    ) {
+      return <SpecialUpload />;
     }
 
     // Standard wiki page tabs

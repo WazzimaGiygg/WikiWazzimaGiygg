@@ -21,10 +21,17 @@ import {
   ShieldAlert,
   Copy,
   Check,
+  Image as ImageIcon,
+  Flame,
+  UploadCloud,
+  ExternalLink,
+  Loader2,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import { WikiPage } from '../types/wiki';
 import { savePage, canUserEditPage, getEffectiveProtectionLevel } from '../services/wikiService';
+import { saveUploadedFile, subscribeToUploadedFiles } from '../services/extensionService';
+import { WikiFileDoc } from '../extensions/types';
 import { parseWikitext } from '../core/parser';
 import { computeRevisionDiff } from '../core/diff';
 
@@ -42,7 +49,132 @@ export const EditView: React.FC<EditViewProps> = ({
   onSaved,
   onCancel,
 }) => {
-  const { currentUser, existingPageSlugs, loginWithGoogle } = useWiki();
+  const {
+    currentUser,
+    existingPageSlugs,
+    loginWithGoogle,
+    isBlazePlanActive,
+    isBureaucrat,
+    toggleBlazePlan,
+    navigateToPage,
+  } = useWiki();
+
+  // Image insertion modal state
+  const [showImageModal, setShowImageModal] = useState(false);
+  const [imageModalTab, setImageModalTab] = useState<'upload' | 'gallery' | 'manual'>('upload');
+  const [recentFiles, setRecentFiles] = useState<WikiFileDoc[]>([]);
+  const [selectedFileName, setSelectedFileName] = useState('');
+  const [imageCaption, setImageCaption] = useState('');
+  const [imageAlign, setImageAlign] = useState<'right' | 'left' | 'center' | 'none'>('right');
+  const [imageWidth, setImageWidth] = useState('300px');
+
+  // Quick upload state inside modal
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadPreview, setUploadPreview] = useState<string | null>(null);
+  const [uploadTitle, setUploadTitle] = useState('');
+  const [uploadDesc, setUploadDesc] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [enablingBlaze, setEnablingBlaze] = useState(false);
+  const modalFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Subscribe to recent files when modal opens
+  React.useEffect(() => {
+    if (!showImageModal) return;
+    const unsub = subscribeToUploadedFiles(files => {
+      setRecentFiles(files);
+      if (files.length > 0 && !selectedFileName) {
+        setSelectedFileName(files[0].fileName);
+      }
+    }, 20);
+    return () => unsub();
+  }, [showImageModal, selectedFileName]);
+
+  const handleSelectModalFile = (file: File) => {
+    setUploadFile(file);
+    setUploadError(null);
+    const clean = file.name.replace(/\s+/g, '_');
+    setUploadTitle(clean);
+    const reader = new FileReader();
+    reader.onload = e => {
+      setUploadPreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const insertRawText = (textToInsert: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      setContent(prev => prev + '\n' + textToInsert);
+      return;
+    }
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const newContent =
+      textarea.value.substring(0, start) + textToInsert + textarea.value.substring(end);
+    setContent(newContent);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + textToInsert.length, start + textToInsert.length);
+    }, 10);
+  };
+
+  const buildImageSyntax = (name: string, caption: string, align: string, width: string) => {
+    const clean = name.replace(/^(ficheiro:|file:|imagem:|image:)/i, '').replace(/\s+/g, '_');
+    const parts = [`Ficheiro:${clean}`, 'thumb'];
+    if (align && align !== 'right') parts.push(align);
+    if (width && width !== '300px') parts.push(width);
+    if (caption.trim()) parts.push(caption.trim());
+    return `[[${parts.join('|')}]]\n`;
+  };
+
+  const handleQuickUploadAndInsert = async () => {
+    if (!isBlazePlanActive) {
+      setUploadError('O upload de imagens está bloqueado porque o Plano Blaze não está ativado na extensão.');
+      return;
+    }
+    if (!uploadFile || !uploadPreview) {
+      setUploadError('Selecione um arquivo de imagem para carregar.');
+      return;
+    }
+    if (currentUser.isAnonymous) {
+      setUploadError('Você precisa estar autenticado para carregar arquivos.');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError(null);
+    try {
+      const savedDoc = await saveUploadedFile({
+        fileName: uploadTitle || uploadFile.name,
+        dataUrl: uploadPreview,
+        mimeType: uploadFile.type || 'image/png',
+        size: uploadFile.size,
+        author: currentUser.username,
+        authorId: currentUser.uid,
+        description: uploadDesc || imageCaption,
+      });
+
+      const tag = buildImageSyntax(savedDoc.fileName, imageCaption, imageAlign, imageWidth);
+      insertRawText(tag);
+      setShowImageModal(false);
+      setUploadFile(null);
+      setUploadPreview(null);
+      setUploadTitle('');
+      setUploadDesc('');
+    } catch (err: any) {
+      setUploadError('Falha no upload: ' + (err.message || String(err)));
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleInsertExistingFile = () => {
+    if (!selectedFileName.trim()) return;
+    const tag = buildImageSyntax(selectedFileName.trim(), imageCaption, imageAlign, imageWidth);
+    insertRawText(tag);
+    setShowImageModal(false);
+  };
 
   const editPermission = useMemo(() => {
     return page
@@ -345,6 +477,33 @@ export const EditView: React.FC<EditViewProps> = ({
         >
           --~~~~
         </button>
+
+        <div className="h-4 w-px bg-gray-300 dark:bg-gray-600 mx-1" />
+
+        <button
+          type="button"
+          onClick={() => setShowImageModal(true)}
+          className={`px-2 py-1 rounded flex items-center gap-1.5 cursor-pointer transition-colors text-xs font-medium ${
+            isBlazePlanActive
+              ? 'bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 text-[#0645ad] dark:text-[#6ba4ff] border border-blue-200 dark:border-blue-800'
+              : 'bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
+          }`}
+          title="Inserir ou carregar imagem no artigo"
+        >
+          <ImageIcon className="w-3.5 h-3.5" />
+          <span>Imagem</span>
+          {isBlazePlanActive ? (
+            <span className="flex items-center gap-0.5 text-[9px] px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 font-semibold">
+              <Flame className="w-2.5 h-2.5 text-emerald-600" />
+              Blaze ON
+            </span>
+          ) : (
+            <span className="flex items-center gap-0.5 text-[9px] px-1 py-0.2 rounded bg-amber-200 text-amber-900 dark:bg-amber-900/80 dark:text-amber-200 font-semibold">
+              <Flame className="w-2.5 h-2.5 text-amber-600" />
+              Blaze OFF
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Main Wikitext Textarea */}
@@ -606,6 +765,474 @@ export const EditView: React.FC<EditViewProps> = ({
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Image Insertion Modal with Blaze Plan Verification */}
+      {showImageModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-[#1a1f2c] border border-gray-300 dark:border-gray-700 rounded-lg shadow-2xl max-w-2xl w-full my-8 overflow-hidden text-gray-900 dark:text-gray-100 animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 bg-[#f8f9fa] dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded text-[#0645ad] dark:text-[#6ba4ff]">
+                  <ImageIcon className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-base">Inserir Ficheiro de Mídia</h3>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {isBlazePlanActive ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                        <Flame className="w-3 h-3 text-emerald-600" />
+                        Plano Blaze Ativo na Extensão (Upload Permitido)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800">
+                        <Flame className="w-3 h-3 text-amber-600" />
+                        Plano Blaze Inativo na Extensão (Upload Bloqueado)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImageModal(false);
+                  setUploadError(null);
+                }}
+                className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* If Blaze Plan is NOT enabled: prominent alert and 1-click activation for bureaucrats */}
+            {!isBlazePlanActive && (
+              <div className="p-5 bg-amber-50/80 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-900/60 text-xs text-amber-900 dark:text-amber-200 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 bg-amber-100 dark:bg-amber-900/70 rounded-full text-amber-600 dark:text-amber-300 shrink-0">
+                    <Flame className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <h4 className="font-bold text-sm text-amber-950 dark:text-amber-100">
+                      Upload de Imagens Desativado via Extensão
+                    </h4>
+                    <p className="leading-relaxed">
+                      Conforme a arquitetura do Wiki, o envio e armazenamento de ficheiros de mídia requer que a opção{' '}
+                      <strong>Plano Blaze do Firebase</strong> esteja ativada nas configurações da extensão{' '}
+                      <code>UploadWizard</code> (<code>upload-wizard</code>).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-amber-200/60 dark:border-amber-900/40">
+                  {isBureaucrat ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={enablingBlaze}
+                        onClick={async () => {
+                          setEnablingBlaze(true);
+                          try {
+                            await toggleBlazePlan(true);
+                          } catch (err) {
+                            console.error(err);
+                          } finally {
+                            setEnablingBlaze(false);
+                          }
+                        }}
+                        className="px-3.5 py-1.5 rounded bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                      >
+                        {enablingBlaze ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Flame className="w-3.5 h-3.5" />
+                        )}
+                        <span>Ativar Plano Blaze na Extensão Agora</span>
+                      </button>
+                      <span className="text-[11px] text-amber-800 dark:text-amber-300">
+                        (Ação exclusiva de Burocrata)
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                      Apenas burocratas podem alterar as configurações da extensão para habilitar o upload.
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowImageModal(false);
+                      navigateToPage('Especial:Extensões');
+                    }}
+                    className="text-xs text-[#0645ad] dark:text-[#6ba4ff] hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Configurações em Especial:Extensões</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Tabs */}
+            <div className="flex border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-850 px-4 pt-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setImageModalTab('upload')}
+                disabled={!isBlazePlanActive}
+                className={`px-3 py-2 font-medium border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 ${
+                  imageModalTab === 'upload'
+                    ? 'border-[#3366cc] text-[#0645ad] dark:text-[#6ba4ff]'
+                    : !isBlazePlanActive
+                    ? 'border-transparent text-gray-400 cursor-not-allowed opacity-60'
+                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                }`}
+              >
+                <UploadCloud className="w-3.5 h-3.5" />
+                <span>1. Carregar Arquivo {isBlazePlanActive ? '' : '(Requer Blaze)'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setImageModalTab('gallery')}
+                className={`px-3 py-2 font-medium border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 ${
+                  imageModalTab === 'gallery'
+                    ? 'border-[#3366cc] text-[#0645ad] dark:text-[#6ba4ff]'
+                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                }`}
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+                <span>2. Ficheiros do Wiki ({recentFiles.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setImageModalTab('manual')}
+                className={`px-3 py-2 font-medium border-b-2 cursor-pointer transition-colors flex items-center gap-1.5 ${
+                  imageModalTab === 'manual'
+                    ? 'border-[#3366cc] text-[#0645ad] dark:text-[#6ba4ff]'
+                    : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                }`}
+              >
+                <Code className="w-3.5 h-3.5" />
+                <span>3. Inserção Manual / URL</span>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto text-xs">
+              {uploadError && (
+                <div className="p-2.5 rounded bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-800 text-red-700 dark:text-red-300">
+                  {uploadError}
+                </div>
+              )}
+
+              {/* TAB 1: UPLOAD NOVO ARQUIVO */}
+              {imageModalTab === 'upload' && (
+                <div className="space-y-4">
+                  {isBlazePlanActive ? (
+                    <>
+                      <input
+                        ref={modalFileInputRef}
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif"
+                        className="hidden"
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (file) handleSelectModalFile(file);
+                        }}
+                      />
+
+                      {!uploadFile ? (
+                        <div
+                          onClick={() => modalFileInputRef.current?.click()}
+                          className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center hover:bg-gray-50 dark:hover:bg-gray-800/60 cursor-pointer transition-colors"
+                        >
+                          <UploadCloud className="w-8 h-8 mx-auto text-blue-600 dark:text-blue-400 mb-2" />
+                          <div className="font-semibold text-gray-800 dark:text-gray-200">
+                            Clique para selecionar uma imagem do computador
+                          </div>
+                          <div className="text-[11px] text-gray-500 mt-1">
+                            Formatos suportados: PNG, JPG, WebP, SVG, GIF (máx. 10MB)
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex gap-4 p-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-lg items-center">
+                          {uploadPreview && (
+                            <div className="w-20 h-20 shrink-0 bg-white dark:bg-black rounded border border-gray-300 dark:border-gray-600 p-1 flex items-center justify-center overflow-hidden">
+                              <img
+                                src={uploadPreview}
+                                alt="Preview"
+                                className="max-w-full max-h-full object-contain"
+                              />
+                            </div>
+                          )}
+                          <div className="flex-1 space-y-1">
+                            <div className="font-medium text-gray-800 dark:text-gray-200 truncate">
+                              {uploadFile.name}
+                            </div>
+                            <div className="text-[11px] text-gray-500">
+                              {(uploadFile.size / 1024).toFixed(1)} KB • {uploadFile.type || 'Imagem'}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setUploadFile(null);
+                                setUploadPreview(null);
+                              }}
+                              className="text-red-600 dark:text-red-400 hover:underline cursor-pointer text-[11px]"
+                            >
+                              Trocar imagem
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {uploadFile && (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                              Nome canônico de destino na Wiki (com extensão)
+                            </label>
+                            <input
+                              type="text"
+                              value={uploadTitle}
+                              onChange={e => setUploadTitle(e.target.value)}
+                              className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 font-mono text-xs"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                Legenda exibida no artigo
+                              </label>
+                              <input
+                                type="text"
+                                value={imageCaption}
+                                onChange={e => setImageCaption(e.target.value)}
+                                placeholder="Ex: Vista panorâmica do castelo"
+                                className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-xs"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                                Alinhamento na página
+                              </label>
+                              <select
+                                value={imageAlign}
+                                onChange={e => setImageAlign(e.target.value as any)}
+                                className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-xs"
+                              >
+                                <option value="right">Direita (Padrão MediaWiki)</option>
+                                <option value="left">Esquerda</option>
+                                <option value="center">Centro</option>
+                                <option value="none">Sem alinhamento</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-center py-6 text-gray-500">
+                      O upload direto está desativado nesta wiki porque o Plano Blaze da extensão está desligado. Use a aba "Ficheiros do Wiki" ou "Inserção Manual".
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 2: GALERIA DE FICHEIROS EXISTENTES */}
+              {imageModalTab === 'gallery' && (
+                <div className="space-y-3">
+                  <div className="text-gray-600 dark:text-gray-400">
+                    Selecione uma imagem já carregada no Wiki para incorporar no texto:
+                  </div>
+
+                  {recentFiles.length === 0 ? (
+                    <div className="py-8 text-center text-gray-400 bg-gray-50 dark:bg-gray-800/40 rounded border border-gray-200 dark:border-gray-700">
+                      Nenhum ficheiro carregado ainda na wiki.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 max-h-56 overflow-y-auto p-1">
+                      {recentFiles.map(file => {
+                        const isSelected = selectedFileName === file.fileName;
+                        return (
+                          <div
+                            key={file.id}
+                            onClick={() => setSelectedFileName(file.fileName)}
+                            className={`p-2 rounded border cursor-pointer transition-all flex flex-col items-center text-center ${
+                              isSelected
+                                ? 'border-[#3366cc] bg-blue-50/70 dark:bg-blue-950/50 ring-2 ring-[#3366cc]/40'
+                                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800'
+                            }`}
+                          >
+                            <div className="w-full h-20 bg-white dark:bg-black rounded flex items-center justify-center overflow-hidden mb-1.5 border border-gray-200 dark:border-gray-800">
+                              <img
+                                src={file.url}
+                                alt={file.title}
+                                className="max-w-full max-h-full object-contain"
+                              />
+                            </div>
+                            <span className="font-mono text-[10px] text-gray-800 dark:text-gray-200 truncate w-full">
+                              {file.fileName}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {selectedFileName && (
+                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                            Legenda
+                          </label>
+                          <input
+                            type="text"
+                            value={imageCaption}
+                            onChange={e => setImageCaption(e.target.value)}
+                            placeholder="Legenda da imagem"
+                            className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-xs"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                            Alinhamento
+                          </label>
+                          <select
+                            value={imageAlign}
+                            onChange={e => setImageAlign(e.target.value as any)}
+                            className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-xs"
+                          >
+                            <option value="right">Direita (Padrão)</option>
+                            <option value="left">Esquerda</option>
+                            <option value="center">Centro</option>
+                            <option value="none">Sem alinhamento</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB 3: INSERÇÃO MANUAL */}
+              {imageModalTab === 'manual' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                      Nome do Ficheiro ou URL Externa da Imagem
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedFileName}
+                      onChange={e => setSelectedFileName(e.target.value)}
+                      placeholder="Ex: Exemplo.png ou https://exemplo.com/foto.jpg"
+                      className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 font-mono text-xs"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                        Legenda
+                      </label>
+                      <input
+                        type="text"
+                        value={imageCaption}
+                        onChange={e => setImageCaption(e.target.value)}
+                        placeholder="Legenda da imagem"
+                        className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                        Alinhamento
+                      </label>
+                      <select
+                        value={imageAlign}
+                        onChange={e => setImageAlign(e.target.value as any)}
+                        className="w-full px-2.5 py-1.5 border border-gray-300 dark:border-gray-700 rounded bg-white dark:bg-gray-900 text-xs"
+                      >
+                        <option value="right">Direita (Padrão)</option>
+                        <option value="left">Esquerda</option>
+                        <option value="center">Centro</option>
+                        <option value="none">Sem alinhamento</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Wikitext Preview Code */}
+              {(uploadTitle || selectedFileName) && (
+                <div className="p-2.5 bg-gray-100 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-800">
+                  <div className="text-[10px] font-semibold uppercase text-gray-500 mb-1">
+                    Código Wikitexto a ser inserido:
+                  </div>
+                  <code className="text-[11px] text-[#0645ad] dark:text-[#6ba4ff] font-mono break-all">
+                    {buildImageSyntax(
+                      uploadTitle || selectedFileName || 'Exemplo.png',
+                      imageCaption,
+                      imageAlign,
+                      imageWidth
+                    )}
+                  </code>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="p-4 bg-gray-50 dark:bg-gray-850 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImageModal(false);
+                  setUploadError(null);
+                }}
+                className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <div className="flex items-center gap-2">
+                {imageModalTab === 'upload' && isBlazePlanActive && uploadFile && (
+                  <button
+                    type="button"
+                    disabled={isUploading}
+                    onClick={handleQuickUploadAndInsert}
+                    className="px-4 py-1.5 bg-[#3366cc] hover:bg-[#254b99] text-white rounded font-medium shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isUploading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <UploadCloud className="w-3.5 h-3.5" />
+                    )}
+                    <span>{isUploading ? 'A carregar...' : 'Carregar e Inserir no Artigo'}</span>
+                  </button>
+                )}
+
+                {(imageModalTab === 'gallery' || imageModalTab === 'manual') && selectedFileName && (
+                  <button
+                    type="button"
+                    onClick={handleInsertExistingFile}
+                    className="px-4 py-1.5 bg-[#3366cc] hover:bg-[#254b99] text-white rounded font-medium shadow-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Inserir no Artigo</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

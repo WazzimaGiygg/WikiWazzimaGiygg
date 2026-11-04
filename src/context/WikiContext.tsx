@@ -11,7 +11,13 @@ import {
   subscribeToUserRights,
   DEFAULT_SUPER_ADMIN_EMAIL,
 } from '../services/wikiService';
-import { syncCodebaseExtensionsToFirestore } from '../services/extensionService';
+import {
+  syncCodebaseExtensionsToFirestore,
+  subscribeToExtensions,
+  updateExtensionConfigInFirestore,
+  isBlazePlanActiveInExtensions,
+} from '../services/extensionService';
+import { WikiExtensionDoc } from '../extensions';
 import { slugify } from '../core/parser';
 
 interface WikiContextType {
@@ -35,6 +41,9 @@ interface WikiContextType {
   isBureaucrat: boolean;
   userPageSlug?: string;
   userTalkSlug?: string;
+  isBlazePlanActive: boolean;
+  uploadWizardExtension: WikiExtensionDoc | null;
+  toggleBlazePlan: (active: boolean) => Promise<void>;
 }
 
 const DEFAULT_SETTINGS: WikiSettings = {
@@ -174,11 +183,31 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
+    const unsubExt = subscribeToExtensions(list => {
+      setExtensionsList(list);
+    });
+
     return () => {
       unsubPages();
       unsubSettings();
+      unsubExt();
     };
   }, []);
+
+  const [extensionsList, setExtensionsList] = useState<WikiExtensionDoc[]>([]);
+
+  const isBlazePlanActive = isBlazePlanActiveInExtensions(extensionsList);
+  const uploadWizardExtension = extensionsList.find(e => e.id === 'upload-wizard') || null;
+
+  const toggleBlazePlan = async (active: boolean) => {
+    const currentConfig = uploadWizardExtension?.config || {};
+    await updateExtensionConfigInFirestore(
+      'upload-wizard',
+      { ...currentConfig, blazePlanEnabled: active },
+      isBureaucrat,
+      currentUser.username
+    );
+  };
 
   // Persist skin
   const handleSetSkin = (newSkin: WikiSkin) => {
@@ -309,6 +338,9 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
         isBureaucrat,
         userPageSlug: userPagesInfo?.userPageSlug,
         userTalkSlug: userPagesInfo?.userTalkSlug,
+        isBlazePlanActive,
+        uploadWizardExtension,
+        toggleBlazePlan,
       }}
     >
       {children}

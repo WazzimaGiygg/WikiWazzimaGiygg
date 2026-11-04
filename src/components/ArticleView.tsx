@@ -18,11 +18,15 @@ import {
   LogIn,
   ShieldCheck,
   ShieldAlert,
+  Download,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import { WikiPage } from '../types/wiki';
 import { parseWikitext } from '../core/parser';
 import { canUserEditPage, getEffectiveProtectionLevel } from '../services/wikiService';
+import { getFileDoc } from '../services/extensionService';
+import { WikiFileDoc } from '../extensions/types';
 import { PageProtectionModal } from './PageProtectionModal';
 
 interface ArticleViewProps {
@@ -44,6 +48,18 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
   const [showTOC, setShowTOC] = useState(true);
   const [isWatched, setIsWatched] = useState(false);
   const [showProtectionModal, setShowProtectionModal] = useState(false);
+  const [fileDoc, setFileDoc] = useState<WikiFileDoc | null>(null);
+
+  useEffect(() => {
+    const isFile = slug.startsWith('Ficheiro:') || slug.startsWith('File:') || page?.namespace === 'File';
+    if (!isFile) {
+      setFileDoc(null);
+      return;
+    }
+    getFileDoc(slug).then(doc => {
+      setFileDoc(doc);
+    });
+  }, [slug, page]);
 
   const effectiveLevel = getEffectiveProtectionLevel(page);
   const editPermission = page
@@ -389,6 +405,37 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
               ))}
             </nav>
           )}
+        </div>
+      )}
+
+      {/* MediaWiki Canonical File Viewer */}
+      {fileDoc && (
+        <div className="my-4 p-4 bg-[#f8f9fa] dark:bg-gray-850 border border-[#a2a9b1] dark:border-gray-700 rounded text-xs space-y-3">
+          <div className="flex flex-col items-center justify-center p-4 bg-white dark:bg-black/50 border border-gray-200 dark:border-gray-700 rounded">
+            <img
+              src={fileDoc.url}
+              alt={fileDoc.title}
+              className="max-h-96 max-w-full object-contain rounded shadow-xs"
+            />
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+            <div className="text-gray-600 dark:text-gray-400">
+              <span className="font-semibold text-gray-800 dark:text-gray-200">{fileDoc.fileName}</span>
+              {' • '}
+              {(fileDoc.size / 1024).toFixed(1)} KB
+              {fileDoc.width && fileDoc.height && ` • ${fileDoc.width} × ${fileDoc.height} pixels`}
+              {' • '}
+              <span>{fileDoc.mimeType}</span>
+            </div>
+            <a
+              href={fileDoc.url}
+              download={fileDoc.fileName}
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#3366cc] hover:bg-[#254b99] text-white rounded font-medium shadow-2xs"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Baixar ficheiro em resolução original</span>
+            </a>
+          </div>
         </div>
       )}
 

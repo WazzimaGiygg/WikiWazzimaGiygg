@@ -20,6 +20,7 @@ import {
   Flag,
   Unlock,
   UserSearch,
+  Upload,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
 import { getRandomPageSlug } from '../utils/randomPage';
@@ -55,6 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenSettings }) => {
   ];
 
   const toolLinks = [
+    { label: 'Carregar arquivo', slug: 'Especial:Carregar_arquivo', icon: Upload },
     { label: 'Versão do Software', slug: 'Especial:Versão', icon: Info },
     { label: 'Extensões do Wiki', slug: 'Especial:Extensões', icon: Blocks },
     { label: 'Configurações ($wg)', action: onOpenSettings, icon: Settings },

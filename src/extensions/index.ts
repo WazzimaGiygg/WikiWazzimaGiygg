@@ -7,7 +7,7 @@ import {
   scribuntoExtension,
   dynamicPageListExtension,
 } from './parserExtensions';
-import { visualEditorExtension, wikiEditorExtension } from './mediaExtensions';
+import { visualEditorExtension, wikiEditorExtension, uploadWizardExtension } from './mediaExtensions';
 import { echoExtension, checkUserExtension, abuseFilterExtension } from './adminExtensions';
 import {
   vectorModernSkinExtension,
@@ -39,6 +39,7 @@ export const CODEBASE_EXTENSIONS: ExtensionDefinition[] = [
   // Mídia e Edição
   visualEditorExtension,
   wikiEditorExtension,
+  uploadWizardExtension,
 
   // Administração e Segurança
   echoExtension,

@@ -16,6 +16,7 @@ export interface ExtensionDefinition {
   exampleWikitext?: string;
   defaultActive: boolean;
   installedVia?: ExtensionOrigin;
+  config?: Record<string, any>;
 }
 
 export interface WikiExtensionDoc {
@@ -37,4 +38,22 @@ export interface WikiExtensionDoc {
   createdAt?: string;
   updatedAt: string;
   updatedBy?: string;
+  config?: Record<string, any>;
 }
+
+export interface WikiFileDoc {
+  id: string;
+  title: string;
+  fileName: string;
+  url: string;
+  mimeType: string;
+  size: number;
+  uploadedBy: string;
+  uploadedByUid: string;
+  description: string;
+  license: string;
+  timestamp: string;
+  width?: number;
+  height?: number;
+}
+

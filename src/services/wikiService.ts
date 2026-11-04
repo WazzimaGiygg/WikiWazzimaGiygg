@@ -8,6 +8,7 @@ import {
   query,
   orderBy,
   limit,
+  where,
   onSnapshot,
   Unsubscribe,
 } from 'firebase/firestore';
@@ -63,7 +64,10 @@ export async function seedInitialPagesIfNeeded(): Promise<void> {
       const pageRef = doc(db, WIKI_PAGES_COLLECTION, slug);
       const pageSnap = await getDoc(pageRef);
       if (!pageSnap.exists()) {
-        await setDoc(pageRef, page);
+        await setDoc(pageRef, {
+          ...page,
+          titleLower: page.title.toLowerCase(),
+        });
 
         const revRef = doc(db, `${WIKI_PAGES_COLLECTION}/${slug}/revisions`, page.latestRevisionId);
         await setDoc(revRef, {
@@ -439,6 +443,7 @@ export async function savePage(params: {
   const updatedPage: WikiPage = {
     slug,
     title: params.title,
+    titleLower: params.title.toLowerCase(),
     namespace,
     content: params.content,
     summary: params.summary || (existingPage ? 'Edição de conteúdo' : 'Criação de nova página'),
@@ -546,19 +551,182 @@ export async function getAllPagesList(namespaceFilter?: PageNamespace): Promise<
   return pages.sort((a, b) => a.title.localeCompare(b.title));
 }
 
+/**
+ * REAL-TIME SITE SEARCH USING FIRESTORE INDEXES
+ * Subscribes to Firestore collection queries with range/prefix indexes on titleLower, title, and slug.
+ * Updates in real-time as the user types and as pages are added or modified in Firestore.
+ */
+export function subscribeToSearchPageTitles(
+  searchQuery: string,
+  callback: (results: WikiPage[]) => void,
+  maxResults = 8
+): Unsubscribe {
+  const trimmed = searchQuery.trim();
+  if (!trimmed) {
+    callback([]);
+    return () => {};
+  }
+
+  const lower = trimmed.toLowerCase();
+  const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  const slugTerm = slugify(trimmed);
+
+  // 1. Range query using Firestore index on titleLower
+  const qLower = query(
+    collection(db, WIKI_PAGES_COLLECTION),
+    where('titleLower', '>=', lower),
+    where('titleLower', '<=', lower + '\uf8ff'),
+    orderBy('titleLower', 'asc'),
+    limit(maxResults)
+  );
+
+  // 2. Range query using Firestore index on title (captures capitalized pages / legacy records)
+  const qTitle = query(
+    collection(db, WIKI_PAGES_COLLECTION),
+    where('title', '>=', capitalized),
+    where('title', '<=', capitalized + '\uf8ff'),
+    orderBy('title', 'asc'),
+    limit(maxResults)
+  );
+
+  // 3. Range query using Firestore index on slug
+  const qSlug = query(
+    collection(db, WIKI_PAGES_COLLECTION),
+    where('slug', '>=', slugTerm),
+    where('slug', '<=', slugTerm + '\uf8ff'),
+    orderBy('slug', 'asc'),
+    limit(maxResults)
+  );
+
+  let lowerDocs: WikiPage[] = [];
+  let titleDocs: WikiPage[] = [];
+  let slugDocs: WikiPage[] = [];
+
+  const emitRankedResults = () => {
+    const map = new Map<string, WikiPage>();
+    titleDocs.forEach(p => map.set(p.slug, p));
+    lowerDocs.forEach(p => map.set(p.slug, p));
+    slugDocs.forEach(p => map.set(p.slug, p));
+
+    const combined = Array.from(map.values());
+    combined.sort((a, b) => {
+      const aLower = (a.titleLower || a.title.toLowerCase());
+      const bLower = (b.titleLower || b.title.toLowerCase());
+
+      const aExact = aLower === lower;
+      const bExact = bLower === lower;
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+
+      const aStarts = aLower.startsWith(lower);
+      const bStarts = bLower.startsWith(lower);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+
+      return a.title.localeCompare(b.title);
+    });
+
+    callback(combined.slice(0, maxResults));
+  };
+
+  const unsubLower = onSnapshot(
+    qLower,
+    snap => {
+      lowerDocs = snap.docs.map(d => d.data() as WikiPage);
+      emitRankedResults();
+    },
+    err => {
+      console.warn('Firestore index search (qLower) error:', err);
+    }
+  );
+
+  const unsubTitle = onSnapshot(
+    qTitle,
+    snap => {
+      titleDocs = snap.docs.map(d => d.data() as WikiPage);
+      emitRankedResults();
+    },
+    err => {
+      console.warn('Firestore index search (qTitle) error:', err);
+    }
+  );
+
+  const unsubSlug = onSnapshot(
+    qSlug,
+    snap => {
+      slugDocs = snap.docs.map(d => d.data() as WikiPage);
+      emitRankedResults();
+    },
+    err => {
+      console.warn('Firestore index search (qSlug) error:', err);
+    }
+  );
+
+  return () => {
+    unsubLower();
+    unsubTitle();
+    unsubSlug();
+  };
+}
+
 export async function searchWikiPages(searchQuery: string): Promise<WikiPage[]> {
-  const trimmed = searchQuery.trim().toLowerCase();
+  const trimmed = searchQuery.trim();
   if (!trimmed) return [];
 
-  const allPages = await getAllPagesList();
-  return allPages.filter(page => {
-    return (
-      page.title.toLowerCase().includes(trimmed) ||
-      page.content.toLowerCase().includes(trimmed) ||
-      page.slug.toLowerCase().includes(trimmed) ||
-      page.categories.some(c => c.toLowerCase().includes(trimmed))
-    );
+  const lower = trimmed.toLowerCase();
+  const capitalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+  const map = new Map<string, WikiPage>();
+
+  try {
+    const [snapLower, snapTitle] = await Promise.all([
+      getDocs(
+        query(
+          collection(db, WIKI_PAGES_COLLECTION),
+          where('titleLower', '>=', lower),
+          where('titleLower', '<=', lower + '\uf8ff'),
+          orderBy('titleLower', 'asc'),
+          limit(10)
+        )
+      ),
+      getDocs(
+        query(
+          collection(db, WIKI_PAGES_COLLECTION),
+          where('title', '>=', capitalized),
+          where('title', '<=', capitalized + '\uf8ff'),
+          orderBy('title', 'asc'),
+          limit(10)
+        )
+      ),
+    ]);
+
+    snapLower.forEach(d => map.set(d.id, d.data() as WikiPage));
+    snapTitle.forEach(d => map.set(d.id, d.data() as WikiPage));
+  } catch (error) {
+    console.warn('Firestore index query warning, scanning local list:', error);
+    const allPages = await getAllPagesList();
+    allPages.forEach(page => {
+      if (
+        page.title.toLowerCase().includes(lower) ||
+        page.slug.toLowerCase().includes(lower) ||
+        page.content.toLowerCase().includes(lower)
+      ) {
+        map.set(page.slug, page);
+      }
+    });
+  }
+
+  const list = Array.from(map.values());
+  list.sort((a, b) => {
+    const aLower = (a.titleLower || a.title.toLowerCase());
+    const bLower = (b.titleLower || b.title.toLowerCase());
+    if (aLower === lower) return -1;
+    if (bLower === lower) return 1;
+    if (aLower.startsWith(lower) && !bLower.startsWith(lower)) return -1;
+    if (!aLower.startsWith(lower) && bLower.startsWith(lower)) return 1;
+    return a.title.localeCompare(b.title);
   });
+
+  return list;
 }
 
 export interface UserPagesResult {

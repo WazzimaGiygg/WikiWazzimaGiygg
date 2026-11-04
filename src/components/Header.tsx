@@ -13,9 +13,14 @@ import {
   ExternalLink,
   BookOpen,
   ShieldCheck,
+  Loader2,
+  CornerDownLeft,
+  Sparkles,
+  FileText,
+  ArrowRight,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
-import { searchWikiPages } from '../services/wikiService';
+import { subscribeToSearchPageTitles, searchWikiPages } from '../services/wikiService';
 import { WikiPage } from '../types/wiki';
 
 interface HeaderProps {
@@ -37,28 +42,76 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<WikiPage[]>([]);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [guestNameInput, setGuestNameInput] = useState(currentUser.username);
   const [editingGuestName, setEditingGuestName] = useState(false);
 
   const searchRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchCleanupRef = useRef<(() => void) | null>(null);
 
-  // Handle live search suggestions as user types
+  // REAL-TIME FIRESTORE INDEX SEARCH AS USER TYPES
   useEffect(() => {
-    if (!searchQuery.trim()) {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      if (searchCleanupRef.current) {
+        searchCleanupRef.current();
+        searchCleanupRef.current = null;
+      }
       setSearchResults([]);
       setShowSearchDropdown(false);
+      setIsSearching(false);
+      setSelectedIndex(-1);
       return;
     }
 
-    const timer = setTimeout(async () => {
-      const results = await searchWikiPages(searchQuery);
-      setSearchResults(results.slice(0, 6));
-      setShowSearchDropdown(true);
-    }, 150);
+    setIsSearching(true);
+    setShowSearchDropdown(true);
+    setSelectedIndex(-1);
 
-    return () => clearTimeout(timer);
+    // Cancel previous real-time index subscription
+    if (searchCleanupRef.current) {
+      searchCleanupRef.current();
+      searchCleanupRef.current = null;
+    }
+
+    // Subscribe to real-time Firestore index queries as user types
+    const timer = setTimeout(() => {
+      const unsub = subscribeToSearchPageTitles(trimmed, results => {
+        setSearchResults(results);
+        setIsSearching(false);
+      }, 8);
+
+      searchCleanupRef.current = unsub;
+    }, 50);
+
+    return () => {
+      clearTimeout(timer);
+      if (searchCleanupRef.current) {
+        searchCleanupRef.current();
+        searchCleanupRef.current = null;
+      }
+    };
   }, [searchQuery]);
+
+  // Global keyboard shortcut to focus search: press '/' (when not in an input/textarea)
+  useEffect(() => {
+    const handleGlobalKey = (e: KeyboardEvent) => {
+      if (
+        e.key === '/' &&
+        document.activeElement?.tagName !== 'INPUT' &&
+        document.activeElement?.tagName !== 'TEXTAREA'
+      ) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, []);
 
   // Click outside search
   useEffect(() => {
@@ -71,11 +124,39 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSearchDropdown || searchResults.length === 0) {
+      if (e.key === 'Escape') {
+        setShowSearchDropdown(false);
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev < searchResults.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev > 0 ? prev - 1 : searchResults.length - 1));
+    } else if (e.key === 'Escape') {
+      setShowSearchDropdown(false);
+    } else if (e.key === 'Enter') {
+      if (selectedIndex >= 0 && searchResults[selectedIndex]) {
+        e.preventDefault();
+        navigateToPage(searchResults[selectedIndex].slug);
+        setShowSearchDropdown(false);
+        setSearchQuery('');
+      }
+    }
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
-    if (searchResults.length > 0) {
+    if (selectedIndex >= 0 && searchResults[selectedIndex]) {
+      navigateToPage(searchResults[selectedIndex].slug);
+    } else if (searchResults.length > 0) {
       navigateToPage(searchResults[0].slug);
     } else {
       navigateToPage(searchQuery.trim(), 'edit');
@@ -122,52 +203,129 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
           </button>
         </div>
 
-        {/* Center: Search Bar with Autocomplete */}
+        {/* Center: Search Bar with Autocomplete powered by real-time Firestore indexes */}
         <div ref={searchRef} className="relative flex-1 max-w-lg mx-2">
           <form onSubmit={handleSearchSubmit} className="relative flex items-center">
             <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
-              <Search className="w-4 h-4" />
+              {isSearching ? (
+                <Loader2 className="w-4 h-4 animate-spin text-[#3366cc]" />
+              ) : (
+                <Search className="w-4 h-4" />
+              )}
             </div>
+
             <input
+              ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               onFocus={() => searchQuery.trim() && setShowSearchDropdown(true)}
-              placeholder="Pesquisar no WikiWazzimaGiygg..."
-              className="w-full pl-8 pr-16 py-1.5 text-xs sm:text-sm bg-[#f8f9fa] dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-[#a2a9b1] dark:border-gray-700 rounded focus:outline-hidden focus:border-[#3366cc] focus:ring-1 focus:ring-[#3366cc]"
+              onKeyDown={handleKeyDown}
+              placeholder="Pesquisar títulos no WikiWazzimaGiygg..."
+              className="w-full pl-8 pr-20 py-1.5 text-xs sm:text-sm bg-[#f8f9fa] dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-[#a2a9b1] dark:border-gray-700 rounded focus:outline-hidden focus:border-[#3366cc] focus:ring-1 focus:ring-[#3366cc] transition-all"
             />
+
+            {/* Clear query button */}
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSearchResults([]);
+                  setShowSearchDropdown(false);
+                  searchInputRef.current?.focus();
+                }}
+                className="absolute right-13 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-0.5 cursor-pointer"
+                title="Limpar pesquisa"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {/* Keyboard shortcut hint */}
+            <span className="hidden sm:inline-block absolute right-9 text-[10px] font-mono text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded border border-gray-200 dark:border-gray-700 pointer-events-none select-none">
+              /
+            </span>
+
             <button
               type="submit"
-              className="absolute right-1 px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-gray-300 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded border border-gray-300 dark:border-gray-700"
+              className="absolute right-1 px-2 py-0.5 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded border border-gray-300 dark:border-gray-700 cursor-pointer transition-colors"
             >
               Ir
             </button>
           </form>
 
-          {/* Autocomplete Dropdown */}
+          {/* Autocomplete Dropdown backed by Firestore indexes */}
           {showSearchDropdown && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-900 border border-[#a2a9b1] dark:border-gray-700 rounded shadow-lg overflow-hidden z-50">
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-900 border border-[#a2a9b1] dark:border-gray-700 rounded shadow-xl overflow-hidden z-50 animate-in fade-in duration-100">
+              {/* Header: Firestore real-time status banner */}
+              <div className="px-3 py-1.5 bg-[#f8f9fa] dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between text-[10px] text-gray-600 dark:text-gray-300">
+                <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  Índice Firestore em Tempo Real
+                </span>
+                {isSearching ? (
+                  <span className="flex items-center gap-1 text-[#0645ad] dark:text-[#6ba4ff] font-medium">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Consultando índice...
+                  </span>
+                ) : (
+                  <span>
+                    {searchResults.length} {searchResults.length === 1 ? 'título correspondente' : 'títulos correspondentes'}
+                  </span>
+                )}
+              </div>
+
               {searchResults.length > 0 ? (
-                <ul className="divide-y divide-gray-100 dark:divide-gray-800 text-xs">
-                  {searchResults.map(result => (
-                    <li key={result.slug}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigateToPage(result.slug);
-                          setShowSearchDropdown(false);
-                          setSearchQuery('');
-                        }}
-                        className="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-950/40 flex items-start gap-2 text-gray-800 dark:text-gray-200"
-                      >
-                        <BookOpen className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
-                        <div>
-                          <div className="font-semibold text-gray-900 dark:text-gray-100">{result.title}</div>
-                          <div className="text-[11px] text-gray-500 truncate max-w-sm">{result.summary || 'Página do wiki'}</div>
-                        </div>
-                      </button>
-                    </li>
-                  ))}
+                <ul className="divide-y divide-gray-100 dark:divide-gray-800 text-xs max-h-80 overflow-y-auto">
+                  {searchResults.map((result, idx) => {
+                    const isSelected = selectedIndex === idx;
+                    const nsBadge = getNamespaceBadge(result);
+                    return (
+                      <li key={result.slug}>
+                        <button
+                          type="button"
+                          onMouseEnter={() => setSelectedIndex(idx)}
+                          onClick={() => {
+                            navigateToPage(result.slug);
+                            setShowSearchDropdown(false);
+                            setSearchQuery('');
+                          }}
+                          className={`w-full text-left px-3 py-2 flex items-start justify-between gap-2 cursor-pointer transition-colors ${
+                            isSelected
+                              ? 'bg-blue-50 dark:bg-blue-950/50 text-[#0645ad] dark:text-[#6ba4ff]'
+                              : 'text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/60'
+                          }`}
+                        >
+                          <div className="flex items-start gap-2.5 min-w-0">
+                            <BookOpen className={`w-4 h-4 mt-0.5 shrink-0 ${isSelected ? 'text-[#0645ad] dark:text-[#6ba4ff]' : 'text-gray-400'}`} />
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-semibold text-gray-900 dark:text-gray-100 text-[13px] break-words">
+                                  {highlightMatch(result.title, searchQuery)}
+                                </span>
+                                <span className={`text-[10px] px-1.5 py-0.2 rounded font-medium border border-gray-200 dark:border-gray-700 ${nsBadge.bg}`}>
+                                  {nsBadge.label}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate max-w-sm mt-0.5">
+                                {result.summary || (result.content ? result.content.substring(0, 80).replace(/[#*=[\]{}]/g, '') : 'Página do wiki')}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 flex items-center text-gray-400 pt-1">
+                            {isSelected ? (
+                              <CornerDownLeft className="w-3.5 h-3.5 text-[#0645ad] dark:text-[#6ba4ff]" />
+                            ) : (
+                              <ArrowRight className="w-3.5 h-3.5 opacity-40" />
+                            )}
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
+
+                  {/* Create page direct link */}
                   <li className="p-2 bg-gray-50 dark:bg-gray-800/80 text-center border-t border-gray-200 dark:border-gray-700">
                     <button
                       type="button"
@@ -176,15 +334,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
                         setShowSearchDropdown(false);
                         setSearchQuery('');
                       }}
-                      className="text-[#0645ad] dark:text-[#6ba4ff] hover:underline text-xs"
+                      className="text-[#0645ad] dark:text-[#6ba4ff] hover:underline text-xs inline-flex items-center gap-1 cursor-pointer font-medium"
                     >
-                      Criar a página &quot;{searchQuery}&quot; neste wiki →
+                      <span>Criar a página &quot;{searchQuery}&quot; neste wiki</span>
+                      <ArrowRight className="w-3 h-3" />
                     </button>
                   </li>
                 </ul>
-              ) : (
-                <div className="p-3 text-center text-xs text-gray-500">
-                  <p>Nenhuma página encontrada com &quot;{searchQuery}&quot;.</p>
+              ) : !isSearching ? (
+                <div className="p-4 text-center text-xs text-gray-500 dark:text-gray-400 space-y-2">
+                  <p>
+                    Nenhum título no índice do Firestore corresponde a &quot;<strong>{searchQuery}</strong>&quot;.
+                  </p>
                   <button
                     type="button"
                     onClick={() => {
@@ -192,12 +353,21 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
                       setShowSearchDropdown(false);
                       setSearchQuery('');
                     }}
-                    className="mt-1 inline-block text-blue-600 dark:text-blue-400 font-semibold hover:underline"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#3366cc] hover:bg-[#254b99] text-white rounded font-medium text-xs cursor-pointer shadow-2xs"
                   >
-                    Criar &quot;{searchQuery}&quot; agora?
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Criar &quot;{searchQuery}&quot; agora</span>
                   </button>
                 </div>
-              )}
+              ) : null}
+
+              {/* Cheatsheet Footer */}
+              <div className="px-3 py-1 bg-gray-100 dark:bg-gray-800/90 border-t border-gray-200 dark:border-gray-700 text-[10px] text-gray-500 dark:text-gray-400 flex items-center justify-between">
+                <span>Dica: use as setas ↑↓ e Enter</span>
+                <span className="font-mono text-[9px] bg-white dark:bg-gray-900 px-1 rounded border border-gray-300 dark:border-gray-700">
+                  Esc para fechar
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -422,3 +592,38 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
     </header>
   );
 };
+
+function highlightMatch(text: string, query: string): React.ReactNode {
+  if (!query.trim()) return <span>{text}</span>;
+  const q = query.trim().toLowerCase();
+  const idx = text.toLowerCase().indexOf(q);
+  if (idx === -1) return <span>{text}</span>;
+  const before = text.substring(0, idx);
+  const match = text.substring(idx, idx + q.length);
+  const after = text.substring(idx + q.length);
+  return (
+    <span>
+      {before}
+      <span className="font-bold underline text-[#0645ad] dark:text-[#6ba4ff] bg-blue-100/80 dark:bg-blue-900/50 rounded-xs px-0.5">
+        {match}
+      </span>
+      {after}
+    </span>
+  );
+}
+
+function getNamespaceBadge(page: WikiPage): { label: string; bg: string } {
+  const ns = page.namespace || 'Main';
+  const mapping: Record<string, { label: string; bg: string }> = {
+    Main: { label: 'Artigo', bg: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300' },
+    Help: { label: 'Ajuda', bg: 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300' },
+    File: { label: 'Ficheiro', bg: 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300' },
+    User: { label: 'Usuário', bg: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' },
+    Talk: { label: 'Discussão', bg: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300' },
+    Special: { label: 'Especial', bg: 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300' },
+    Template: { label: 'Predefinição', bg: 'bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300' },
+    Category: { label: 'Categoria', bg: 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300' },
+    Manual: { label: 'Manual', bg: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300' },
+  };
+  return mapping[ns] || { label: ns, bg: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300' };
+}

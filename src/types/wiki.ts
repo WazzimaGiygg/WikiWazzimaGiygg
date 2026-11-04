@@ -7,6 +7,7 @@ export type PageNamespace =
   | 'Template' 
   | 'Category' 
   | 'User'
+  | 'File'
   | 'Wiki';
 
 export type PageProtectionLevel = 'unprotected' | 'semi_protected' | 'locked';
@@ -28,6 +29,7 @@ export interface PageProtectionLogEntry {
 export interface WikiPage {
   slug: string;
   title: string;
+  titleLower?: string;
   namespace: PageNamespace;
   content: string; // Wikitext
   summary: string;
