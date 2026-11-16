@@ -136,6 +136,8 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
         });
 
         try {
+          await seedInitialPagesIfNeeded();
+          await syncCodebaseExtensionsToFirestore();
           const res = await ensureUserPagesExist({
             uid: user.uid,
             displayName: user.displayName,
@@ -158,10 +160,8 @@ export function WikiProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // REAL-TIME: Seed pages and sync codebase extensions to Firestore, then listen to all pages collection
+  // REAL-TIME: Listen to all pages, settings, and extensions collections
   useEffect(() => {
-    seedInitialPagesIfNeeded();
-    syncCodebaseExtensionsToFirestore();
 
     const unsubPages = subscribeToAllPages(pages => {
       const slugSet = new Set<string>();

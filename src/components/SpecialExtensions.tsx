@@ -79,7 +79,7 @@ export const SpecialExtensions: React.FC = () => {
 
   // 1. REAL-TIME SUBSCRIPTION TO FIRESTORE
   useEffect(() => {
-    // Sync codebase extensions on mount
+    // Sync codebase extensions on mount (skips automatically if unauthenticated)
     syncCodebaseExtensionsToFirestore().then(res => {
       if (res.syncedCount > 0) {
         setSyncMessage(`${res.syncedCount} nova(s) extensão(ões) do diretório sincronizada(s) para o Firebase!`);
@@ -88,21 +88,48 @@ export const SpecialExtensions: React.FC = () => {
     });
 
     // Real-time listener
-    const unsubscribe = subscribeToExtensions(extList => {
-      setExtensions(extList);
-      setLoading(false);
+    const unsubscribe = subscribeToExtensions(
+      extList => {
+        const effectiveList: WikiExtensionDoc[] =
+          extList.length > 0
+            ? extList
+            : CODEBASE_EXTENSIONS.map(ext => ({
+                id: ext.id,
+                name: ext.name,
+                category: ext.category,
+                version: ext.version,
+                authors: ext.authors,
+                description: ext.description,
+                url: ext.url,
+                gitTag: ext.gitTag,
+                license: ext.license,
+                hooks: ext.hooks,
+                exampleWikitext: ext.exampleWikitext,
+                isActive: ext.defaultActive,
+                installedVia: 'code' as const,
+                config: ext.config || {},
+                updatedAt: new Date().toISOString(),
+              }));
 
-      if (!selectedExtension && extList.length > 0) {
-        setSelectedExtension(extList[0]);
-        setPlaygroundInput(extList[0].exampleWikitext || '');
-      } else if (selectedExtension) {
-        // Keep selected extension data updated with remote doc
-        const updated = extList.find(e => e.id === selectedExtension.id);
-        if (updated) {
-          setSelectedExtension(updated);
+        setExtensions(effectiveList);
+        setLoading(false);
+
+        if (!selectedExtension && effectiveList.length > 0) {
+          setSelectedExtension(effectiveList[0]);
+          setPlaygroundInput(effectiveList[0].exampleWikitext || '');
+        } else if (selectedExtension) {
+          // Keep selected extension data updated with remote doc
+          const updated = effectiveList.find(e => e.id === selectedExtension.id);
+          if (updated) {
+            setSelectedExtension(updated);
+          }
         }
+      },
+      err => {
+        console.warn('Aviso ao assinar wiki_extensions:', err);
+        setLoading(false);
       }
-    });
+    );
 
     return () => unsubscribe();
   }, []);

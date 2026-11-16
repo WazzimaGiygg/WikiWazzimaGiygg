@@ -20,7 +20,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { useWiki } from '../context/WikiContext';
-import { subscribeToSearchPageTitles, searchWikiPages } from '../services/wikiService';
+import { subscribeToSearchPageTitles, subscribeToRecentPages, searchWikiPages } from '../services/wikiService';
 import { WikiPage } from '../types/wiki';
 
 interface HeaderProps {
@@ -41,18 +41,28 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<WikiPage[]>([]);
+  const [recentPages, setRecentPages] = useState<WikiPage[]>([]);
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [guestNameInput, setGuestNameInput] = useState(currentUser.username);
-  const [editingGuestName, setEditingGuestName] = useState(false);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchCleanupRef = useRef<(() => void) | null>(null);
+  const listItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  // REAL-TIME FIRESTORE INDEX SEARCH AS USER TYPES
+  // Subscribe to recent Firestore pages when dropdown opens with empty query
+  useEffect(() => {
+    if (!showSearchDropdown || searchQuery.trim()) return;
+    const unsubRecent = subscribeToRecentPages(pages => {
+      setRecentPages(pages);
+    }, 6);
+    return () => unsubRecent();
+  }, [showSearchDropdown, searchQuery]);
+
+  // REAL-TIME FIRESTORE INDEX + COLLECTION SEARCH AS USER TYPES
   useEffect(() => {
     const trimmed = searchQuery.trim();
     if (!trimmed) {
@@ -61,31 +71,38 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
         searchCleanupRef.current = null;
       }
       setSearchResults([]);
-      setShowSearchDropdown(false);
       setIsSearching(false);
+      setSearchError(null);
       setSelectedIndex(-1);
       return;
     }
 
     setIsSearching(true);
+    setSearchError(null);
     setShowSearchDropdown(true);
     setSelectedIndex(-1);
 
-    // Cancel previous real-time index subscription
     if (searchCleanupRef.current) {
       searchCleanupRef.current();
       searchCleanupRef.current = null;
     }
 
-    // Subscribe to real-time Firestore index queries as user types
     const timer = setTimeout(() => {
-      const unsub = subscribeToSearchPageTitles(trimmed, results => {
-        setSearchResults(results);
-        setIsSearching(false);
-      }, 8);
+      const unsub = subscribeToSearchPageTitles(
+        trimmed,
+        results => {
+          setSearchResults(results);
+          setIsSearching(false);
+        },
+        8,
+        () => {
+          setSearchError('Não foi possível consultar o índice do Firestore.');
+          setIsSearching(false);
+        }
+      );
 
       searchCleanupRef.current = unsub;
-    }, 50);
+    }, 60);
 
     return () => {
       clearTimeout(timer);
@@ -96,17 +113,25 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
     };
   }, [searchQuery]);
 
+  const activeItems = searchQuery.trim() ? searchResults : recentPages;
+
+  // Keep keyboard-selected item visible inside scrollable listbox
+  useEffect(() => {
+    if (selectedIndex >= 0 && listItemRefs.current[selectedIndex]) {
+      listItemRefs.current[selectedIndex]?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [selectedIndex]);
+
   // Global keyboard shortcut to focus search: press '/' (when not in an input/textarea)
   useEffect(() => {
     const handleGlobalKey = (e: KeyboardEvent) => {
-      if (
-        e.key === '/' &&
-        document.activeElement?.tagName !== 'INPUT' &&
-        document.activeElement?.tagName !== 'TEXTAREA'
-      ) {
+      const tag = document.activeElement?.tagName;
+      const isEditable = (document.activeElement as HTMLElement | null)?.isContentEditable;
+      if (e.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA' && !isEditable) {
         e.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
+        setShowSearchDropdown(true);
       }
     };
     window.addEventListener('keydown', handleGlobalKey);
@@ -124,46 +149,74 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  const selectAndNavigate = (slug: string, tab: 'view' | 'edit' = 'view') => {
+    navigateToPage(slug, tab);
+    setShowSearchDropdown(false);
+    setSearchQuery('');
+    setSelectedIndex(-1);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!showSearchDropdown || searchResults.length === 0) {
-      if (e.key === 'Escape') {
-        setShowSearchDropdown(false);
-      }
+    if (e.key === 'Escape') {
+      setShowSearchDropdown(false);
+      setSelectedIndex(-1);
+      return;
+    }
+
+    if (!showSearchDropdown || activeItems.length === 0) {
       return;
     }
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex(prev => (prev < searchResults.length - 1 ? prev + 1 : 0));
+      setSelectedIndex(prev => (prev < activeItems.length - 1 ? prev + 1 : 0));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex(prev => (prev > 0 ? prev - 1 : searchResults.length - 1));
-    } else if (e.key === 'Escape') {
-      setShowSearchDropdown(false);
-    } else if (e.key === 'Enter') {
-      if (selectedIndex >= 0 && searchResults[selectedIndex]) {
-        e.preventDefault();
-        navigateToPage(searchResults[selectedIndex].slug);
-        setShowSearchDropdown(false);
-        setSearchQuery('');
-      }
+      setSelectedIndex(prev => (prev > 0 ? prev - 1 : activeItems.length - 1));
+    } else if (e.key === 'Enter' && selectedIndex >= 0 && activeItems[selectedIndex]) {
+      e.preventDefault();
+      selectAndNavigate(activeItems[selectedIndex].slug);
     }
   };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
-
-    if (selectedIndex >= 0 && searchResults[selectedIndex]) {
-      navigateToPage(searchResults[selectedIndex].slug);
-    } else if (searchResults.length > 0) {
-      navigateToPage(searchResults[0].slug);
-    } else {
-      navigateToPage(searchQuery.trim(), 'edit');
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      setShowSearchDropdown(true);
+      searchInputRef.current?.focus();
+      return;
     }
-    setShowSearchDropdown(false);
-    setSearchQuery('');
+
+    if (selectedIndex >= 0 && activeItems[selectedIndex]) {
+      selectAndNavigate(activeItems[selectedIndex].slug);
+      return;
+    }
+
+    if (searchResults.length > 0 && !isSearching) {
+      selectAndNavigate(searchResults[0].slug);
+      return;
+    }
+
+    // If user hit Enter before the debounced snapshot finished, query Firestore directly
+    setIsSearching(true);
+    try {
+      const immediate = await searchWikiPages(trimmed);
+      if (immediate.length > 0) {
+        selectAndNavigate(immediate[0].slug);
+      } else {
+        selectAndNavigate(trimmed, 'edit');
+      }
+    } finally {
+      setIsSearching(false);
+    }
   };
+
+  const hasExactMatch =
+    Boolean(searchQuery.trim()) &&
+    searchResults.some(
+      r => r.title.toLowerCase() === searchQuery.trim().toLowerCase() || r.slug.toLowerCase() === searchQuery.trim().toLowerCase()
+    );
 
   return (
     <header className="sticky top-0 z-40 w-full bg-white dark:bg-[#1a1f2c] border-b border-[#a2a9b1] dark:border-gray-800 shadow-2xs">
@@ -193,20 +246,24 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
               <span className="font-serif font-bold text-lg text-gray-900 dark:text-gray-100 leading-none block">
                 {settings.sitename}
               </span>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] text-gray-500 dark:text-gray-400 font-sans tracking-wide">
-                  Tempo Real • Firestore
-                </span>
-              </div>
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-sans tracking-wide block mt-0.5">
+                Motor de Conhecimento Livre
+              </span>
             </div>
           </button>
         </div>
 
-        {/* Center: Search Bar with Autocomplete powered by real-time Firestore indexes */}
+        {/* Center: Search Bar with real-time Firestore results */}
         <div ref={searchRef} className="relative flex-1 max-w-lg mx-2">
-          <form onSubmit={handleSearchSubmit} className="relative flex items-center">
-            <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-gray-400">
+          <form
+            onSubmit={handleSearchSubmit}
+            role="combobox"
+            aria-expanded={showSearchDropdown}
+            aria-haspopup="listbox"
+            aria-controls="wiki-header-search-listbox"
+            className="flex items-center bg-[#f8f9fa] dark:bg-gray-900 border border-[#a2a9b1] dark:border-gray-700 rounded focus-within:border-[#3366cc] focus-within:ring-1 focus-within:ring-[#3366cc] transition-colors"
+          >
+            <div className="pl-2.5 pr-1.5 flex items-center pointer-events-none text-gray-400 shrink-0">
               {isSearching ? (
                 <Loader2 className="w-4 h-4 animate-spin text-[#3366cc]" />
               ) : (
@@ -218,97 +275,123 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
               ref={searchInputRef}
               type="text"
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onFocus={() => searchQuery.trim() && setShowSearchDropdown(true)}
+              onChange={e => {
+                setSearchQuery(e.target.value);
+                setShowSearchDropdown(true);
+              }}
+              onFocus={() => setShowSearchDropdown(true)}
               onKeyDown={handleKeyDown}
-              placeholder="Pesquisar títulos no WikiWazzimaGiygg..."
-              className="w-full pl-8 pr-20 py-1.5 text-xs sm:text-sm bg-[#f8f9fa] dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-[#a2a9b1] dark:border-gray-700 rounded focus:outline-hidden focus:border-[#3366cc] focus:ring-1 focus:ring-[#3366cc] transition-all"
+              placeholder="Pesquisar páginas no Firestore..."
+              aria-label="Pesquisar páginas no Firestore"
+              aria-autocomplete="list"
+              aria-activedescendant={
+                selectedIndex >= 0 && activeItems[selectedIndex]
+                  ? `wiki-search-option-${selectedIndex}`
+                  : undefined
+              }
+              className="w-full py-1.5 pr-2 text-xs sm:text-sm bg-transparent text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-hidden min-w-0"
             />
 
-            {/* Clear query button */}
-            {searchQuery && (
+            <div className="flex items-center gap-1 pr-1 shrink-0">
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setSearchResults([]);
+                    setSelectedIndex(-1);
+                    setShowSearchDropdown(true);
+                    searchInputRef.current?.focus();
+                  }}
+                  className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 p-1 rounded cursor-pointer"
+                  title="Limpar pesquisa"
+                  aria-label="Limpar pesquisa"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <kbd className="hidden sm:inline-block text-[10px] font-mono text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-700 select-none">
+                  /
+                </kbd>
+              )}
+
               <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setSearchResults([]);
-                  setShowSearchDropdown(false);
-                  searchInputRef.current?.focus();
-                }}
-                className="absolute right-13 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-0.5 cursor-pointer"
-                title="Limpar pesquisa"
+                type="submit"
+                className="px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-200/80 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded border border-gray-300 dark:border-gray-700 cursor-pointer transition-colors whitespace-nowrap"
               >
-                <X className="w-3.5 h-3.5" />
+                Ir
               </button>
-            )}
-
-            {/* Keyboard shortcut hint */}
-            <span className="hidden sm:inline-block absolute right-9 text-[10px] font-mono text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded border border-gray-200 dark:border-gray-700 pointer-events-none select-none">
-              /
-            </span>
-
-            <button
-              type="submit"
-              className="absolute right-1 px-2 py-0.5 text-xs font-medium text-gray-700 dark:text-gray-200 bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 rounded border border-gray-300 dark:border-gray-700 cursor-pointer transition-colors"
-            >
-              Ir
-            </button>
+            </div>
           </form>
 
-          {/* Autocomplete Dropdown backed by Firestore indexes */}
+          {/* Real-Time Search Dropdown backed by Firestore */}
           {showSearchDropdown && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-900 border border-[#a2a9b1] dark:border-gray-700 rounded shadow-xl overflow-hidden z-50 animate-in fade-in duration-100">
-              {/* Header: Firestore real-time status banner */}
-              <div className="px-3 py-1.5 bg-[#f8f9fa] dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between text-[10px] text-gray-600 dark:text-gray-300">
-                <span className="inline-flex items-center gap-1.5 font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  Índice Firestore em Tempo Real
+            <div
+              id="wiki-header-search-listbox"
+              role="listbox"
+              className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-gray-900 border border-[#a2a9b1] dark:border-gray-700 rounded shadow-xl overflow-hidden z-50"
+            >
+              {/* Header status bar */}
+              <div className="px-3 py-1.5 bg-[#f8f9fa] dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between text-[11px] text-gray-600 dark:text-gray-300">
+                <span className="font-semibold text-gray-700 dark:text-gray-200">
+                  {searchQuery.trim() ? 'Resultados do Firestore (tempo real)' : 'Navegação rápida · Páginas recentes'}
                 </span>
                 {isSearching ? (
                   <span className="flex items-center gap-1 text-[#0645ad] dark:text-[#6ba4ff] font-medium">
-                    <Loader2 className="w-3 h-3 animate-spin" /> Consultando índice...
+                    <Loader2 className="w-3 h-3 animate-spin" /> Buscando...
                   </span>
                 ) : (
-                  <span>
-                    {searchResults.length} {searchResults.length === 1 ? 'título correspondente' : 'títulos correspondentes'}
+                  <span className="tabular-nums text-gray-500 dark:text-gray-400">
+                    {activeItems.length} {activeItems.length === 1 ? 'página' : 'páginas'}
                   </span>
                 )}
               </div>
 
-              {searchResults.length > 0 ? (
+              {searchError ? (
+                <div className="p-3 text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40">
+                  {searchError}
+                </div>
+              ) : activeItems.length > 0 ? (
                 <ul className="divide-y divide-gray-100 dark:divide-gray-800 text-xs max-h-80 overflow-y-auto">
-                  {searchResults.map((result, idx) => {
+                  {activeItems.map((result, idx) => {
                     const isSelected = selectedIndex === idx;
-                    const nsBadge = getNamespaceBadge(result);
+                    const nsLabel = getNamespaceLabel(result);
+                    const previewText =
+                      result.summary ||
+                      (result.content ? result.content.substring(0, 95).replace(/[#*=[\]{}<>|]/g, '').trim() : 'Página do wiki');
+
                     return (
-                      <li key={result.slug}>
+                      <li key={result.slug} role="option" id={`wiki-search-option-${idx}`} aria-selected={isSelected}>
                         <button
+                          ref={el => {
+                            listItemRefs.current[idx] = el;
+                          }}
                           type="button"
                           onMouseEnter={() => setSelectedIndex(idx)}
-                          onClick={() => {
-                            navigateToPage(result.slug);
-                            setShowSearchDropdown(false);
-                            setSearchQuery('');
-                          }}
+                          onClick={() => selectAndNavigate(result.slug)}
                           className={`w-full text-left px-3 py-2 flex items-start justify-between gap-2 cursor-pointer transition-colors ${
                             isSelected
                               ? 'bg-blue-50 dark:bg-blue-950/50 text-[#0645ad] dark:text-[#6ba4ff]'
                               : 'text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800/60'
                           }`}
                         >
-                          <div className="flex items-start gap-2.5 min-w-0">
-                            <BookOpen className={`w-4 h-4 mt-0.5 shrink-0 ${isSelected ? 'text-[#0645ad] dark:text-[#6ba4ff]' : 'text-gray-400'}`} />
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
+                          <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                            <BookOpen
+                              className={`w-4 h-4 mt-0.5 shrink-0 ${
+                                isSelected ? 'text-[#0645ad] dark:text-[#6ba4ff]' : 'text-gray-400'
+                              }`}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-baseline gap-1.5 flex-wrap">
                                 <span className="font-semibold text-gray-900 dark:text-gray-100 text-[13px] break-words">
                                   {highlightMatch(result.title, searchQuery)}
                                 </span>
-                                <span className={`text-[10px] px-1.5 py-0.2 rounded font-medium border border-gray-200 dark:border-gray-700 ${nsBadge.bg}`}>
-                                  {nsBadge.label}
+                                <span className="text-[11px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                                  · {nsLabel}
                                 </span>
                               </div>
-                              <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate max-w-sm mt-0.5">
-                                {result.summary || (result.content ? result.content.substring(0, 80).replace(/[#*=[\]{}]/g, '') : 'Página do wiki')}
+                              <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                                {previewText}
                               </div>
                             </div>
                           </div>
@@ -325,48 +408,43 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
                     );
                   })}
 
-                  {/* Create page direct link */}
-                  <li className="p-2 bg-gray-50 dark:bg-gray-800/80 text-center border-t border-gray-200 dark:border-gray-700">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigateToPage(searchQuery.trim(), 'edit');
-                        setShowSearchDropdown(false);
-                        setSearchQuery('');
-                      }}
-                      className="text-[#0645ad] dark:text-[#6ba4ff] hover:underline text-xs inline-flex items-center gap-1 cursor-pointer font-medium"
-                    >
-                      <span>Criar a página &quot;{searchQuery}&quot; neste wiki</span>
-                      <ArrowRight className="w-3 h-3" />
-                    </button>
-                  </li>
+                  {searchQuery.trim() && !hasExactMatch && (
+                    <li className="p-2 bg-gray-50 dark:bg-gray-800/80 text-center border-t border-gray-200 dark:border-gray-700">
+                      <button
+                        type="button"
+                        onClick={() => selectAndNavigate(searchQuery.trim(), 'edit')}
+                        className="text-[#0645ad] dark:text-[#6ba4ff] hover:underline text-xs inline-flex items-center gap-1 cursor-pointer font-medium"
+                      >
+                        <span>Criar a página &quot;{searchQuery.trim()}&quot; neste wiki</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </li>
+                  )}
                 </ul>
-              ) : !isSearching ? (
+              ) : !isSearching && searchQuery.trim() ? (
                 <div className="p-4 text-center text-xs text-gray-500 dark:text-gray-400 space-y-2">
                   <p>
-                    Nenhum título no índice do Firestore corresponde a &quot;<strong>{searchQuery}</strong>&quot;.
+                    Nenhuma página no Firestore corresponde a &quot;<strong>{searchQuery.trim()}</strong>&quot;.
                   </p>
                   <button
                     type="button"
-                    onClick={() => {
-                      navigateToPage(searchQuery.trim(), 'edit');
-                      setShowSearchDropdown(false);
-                      setSearchQuery('');
-                    }}
+                    onClick={() => selectAndNavigate(searchQuery.trim(), 'edit')}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#3366cc] hover:bg-[#254b99] text-white rounded font-medium text-xs cursor-pointer shadow-2xs"
                   >
                     <FileText className="w-3.5 h-3.5" />
-                    <span>Criar &quot;{searchQuery}&quot; agora</span>
+                    <span>Criar &quot;{searchQuery.trim()}&quot; agora</span>
                   </button>
                 </div>
-              ) : null}
+              ) : (
+                <div className="p-4 text-center text-xs text-gray-500 dark:text-gray-400">
+                  Carregando páginas recentes do Firestore...
+                </div>
+              )}
 
-              {/* Cheatsheet Footer */}
-              <div className="px-3 py-1 bg-gray-100 dark:bg-gray-800/90 border-t border-gray-200 dark:border-gray-700 text-[10px] text-gray-500 dark:text-gray-400 flex items-center justify-between">
-                <span>Dica: use as setas ↑↓ e Enter</span>
-                <span className="font-mono text-[9px] bg-white dark:bg-gray-900 px-1 rounded border border-gray-300 dark:border-gray-700">
-                  Esc para fechar
-                </span>
+              {/* Keyboard hint footer */}
+              <div className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800/90 border-t border-gray-200 dark:border-gray-700 text-[10px] text-gray-500 dark:text-gray-400 flex items-center justify-between">
+                <span>Use ↑ ↓ para navegar e Enter para abrir</span>
+                <span>Esc para fechar</span>
               </div>
             </div>
           )}
@@ -594,13 +672,34 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings }) => {
 };
 
 function highlightMatch(text: string, query: string): React.ReactNode {
-  if (!query.trim()) return <span>{text}</span>;
-  const q = query.trim().toLowerCase();
-  const idx = text.toLowerCase().indexOf(q);
+  const trimmed = query.trim();
+  if (!trimmed) return <span>{text}</span>;
+
+  const stripAccents = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const normQuery = stripAccents(trimmed);
+  if (!normQuery) return <span>{text}</span>;
+
+  // Map normalized character indices back to original string indices
+  const chars = Array.from(text);
+  const normMap: number[] = [];
+  let normStr = '';
+  chars.forEach((ch, origIdx) => {
+    const stripped = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    for (let i = 0; i < stripped.length; i++) {
+      normStr += stripped[i];
+      normMap.push(origIdx);
+    }
+  });
+
+  const idx = normStr.indexOf(normQuery);
   if (idx === -1) return <span>{text}</span>;
-  const before = text.substring(0, idx);
-  const match = text.substring(idx, idx + q.length);
-  const after = text.substring(idx + q.length);
+
+  const startChar = normMap[idx];
+  const endChar = normMap[idx + normQuery.length - 1] + 1;
+  const before = chars.slice(0, startChar).join('');
+  const match = chars.slice(startChar, endChar).join('');
+  const after = chars.slice(endChar).join('');
+
   return (
     <span>
       {before}
@@ -612,18 +711,18 @@ function highlightMatch(text: string, query: string): React.ReactNode {
   );
 }
 
-function getNamespaceBadge(page: WikiPage): { label: string; bg: string } {
+function getNamespaceLabel(page: WikiPage): string {
   const ns = page.namespace || 'Main';
-  const mapping: Record<string, { label: string; bg: string }> = {
-    Main: { label: 'Artigo', bg: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300' },
-    Help: { label: 'Ajuda', bg: 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300' },
-    File: { label: 'Ficheiro', bg: 'bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300' },
-    User: { label: 'Usuário', bg: 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' },
-    Talk: { label: 'Discussão', bg: 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300' },
-    Special: { label: 'Especial', bg: 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300' },
-    Template: { label: 'Predefinição', bg: 'bg-cyan-50 dark:bg-cyan-950/60 text-cyan-700 dark:text-cyan-300' },
-    Category: { label: 'Categoria', bg: 'bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300' },
-    Manual: { label: 'Manual', bg: 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300' },
+  const mapping: Record<string, string> = {
+    Main: 'Artigo',
+    Help: 'Ajuda',
+    File: 'Ficheiro',
+    User: 'Usuário',
+    Talk: 'Discussão',
+    Special: 'Especial',
+    Template: 'Predefinição',
+    Category: 'Categoria',
+    Manual: 'Manual',
   };
-  return mapping[ns] || { label: ns, bg: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300' };
+  return mapping[ns] || ns;
 }

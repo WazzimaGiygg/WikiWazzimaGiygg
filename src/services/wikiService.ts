@@ -12,7 +12,7 @@ import {
   onSnapshot,
   Unsubscribe,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { db, auth, handleFirestoreError, OperationType } from './firebase';
 import {
   WikiPage,
   PageRevision,
@@ -53,7 +53,7 @@ let isSeeding = false;
 
 // Ensure initial pages exist in Firestore if database is fresh
 export async function seedInitialPagesIfNeeded(): Promise<void> {
-  if (isSeeding) return;
+  if (isSeeding || !auth.currentUser || auth.currentUser.isAnonymous) return;
   isSeeding = true;
   try {
     const mainDocRef = doc(db, WIKI_PAGES_COLLECTION, 'Página_principal');
@@ -551,15 +551,205 @@ export async function getAllPagesList(namespaceFilter?: PageNamespace): Promise<
   return pages.sort((a, b) => a.title.localeCompare(b.title));
 }
 
+function normalizeSearchText(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+const SPECIAL_PAGES_CATALOG: WikiPage[] = [
+  {
+    slug: 'Especial:Mudanças_recentes',
+    title: 'Especial:Mudanças recentes',
+    namespace: 'Special',
+    content: 'Registro cronológico em tempo real de todas as edições recentes da wiki.',
+    summary: 'Acompanhe todas as edições e revisões recentes no Firestore',
+    author: 'Sistema MediaWiki',
+    authorId: 'system',
+    revisionCount: 1,
+    latestRevisionId: 'special',
+    categories: [],
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    slug: 'Especial:Todas_as_páginas',
+    title: 'Especial:Todas as páginas',
+    namespace: 'Special',
+    content: 'Índice alfabético completo de todos os artigos e páginas armazenados no Firestore.',
+    summary: 'Catálogo completo de páginas da wiki por namespace',
+    author: 'Sistema MediaWiki',
+    authorId: 'system',
+    revisionCount: 1,
+    latestRevisionId: 'special',
+    categories: [],
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    slug: 'Especial:Extensões',
+    title: 'Especial:Extensões',
+    namespace: 'Special',
+    content: 'Gerenciamento e simulador Parsoid-TS das extensões do WikiWazzimaGiygg.',
+    summary: 'Catálogo de extensões sincronizadas com o Firestore',
+    author: 'Sistema MediaWiki',
+    authorId: 'system',
+    revisionCount: 1,
+    latestRevisionId: 'special',
+    categories: [],
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    slug: 'Especial:Carregar_arquivo',
+    title: 'Especial:Carregar arquivo',
+    namespace: 'Special',
+    content: 'UploadWizard para envio de imagens e ficheiros para a wiki.',
+    summary: 'Enviar imagens e ficheiros multimídia',
+    author: 'Sistema MediaWiki',
+    authorId: 'system',
+    revisionCount: 1,
+    latestRevisionId: 'special',
+    categories: [],
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    slug: 'Especial:Versão',
+    title: 'Especial:Versão',
+    namespace: 'Special',
+    content: 'Informações técnicas do motor MediaWiki TS, versões e arquitetura.',
+    summary: 'Detalhes da versão do software e dependências',
+    author: 'Sistema MediaWiki',
+    authorId: 'system',
+    revisionCount: 1,
+    latestRevisionId: 'special',
+    categories: [],
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    slug: 'Especial:GitHubSync',
+    title: 'Especial:GitHubSync',
+    namespace: 'Special',
+    content: 'Sincronização e atualizações do repositório oficial no GitHub.',
+    summary: 'Commits e sincronização com o repositório',
+    author: 'Sistema MediaWiki',
+    authorId: 'system',
+    revisionCount: 1,
+    latestRevisionId: 'special',
+    categories: [],
+    createdAt: '',
+    updatedAt: '',
+  },
+  {
+    slug: 'Especial:Permissões_de_usuário',
+    title: 'Especial:Permissões de usuário',
+    namespace: 'Special',
+    content: 'Painel de burocrata para gestão de grupos, direitos de usuário e páginas protegidas.',
+    summary: 'Administração de permissões e governança da wiki',
+    author: 'Sistema MediaWiki',
+    authorId: 'system',
+    revisionCount: 1,
+    latestRevisionId: 'special',
+    categories: [],
+    createdAt: '',
+    updatedAt: '',
+  },
+];
+
+function rankWikiSearchResults(pages: WikiPage[], rawQuery: string, maxResults: number): WikiPage[] {
+  const normQuery = normalizeSearchText(rawQuery);
+  const lowerQuery = rawQuery.trim().toLowerCase();
+
+  const scorePage = (page: WikiPage): number => {
+    const normTitle = normalizeSearchText(page.title);
+    const normSlug = normalizeSearchText(page.slug.replace(/_/g, ' '));
+    const normSummary = normalizeSearchText(page.summary || '');
+    const normContent = normalizeSearchText((page.content || '').slice(0, 1200));
+
+    if (page.title.toLowerCase() === lowerQuery || normTitle === normQuery || normSlug === normQuery) {
+      return 1000;
+    }
+    if (normTitle.startsWith(normQuery) || normSlug.startsWith(normQuery)) {
+      return 800;
+    }
+    // Check title without namespace prefix (e.g. "wikitexto" matching "Ajuda:Wikitexto")
+    const colonIdx = normTitle.indexOf(':');
+    if (colonIdx !== -1) {
+      const localTitle = normTitle.slice(colonIdx + 1).trim();
+      if (localTitle === normQuery) return 900;
+      if (localTitle.startsWith(normQuery)) return 750;
+    }
+    if (normTitle.includes(normQuery) || normSlug.includes(normQuery)) {
+      return 600;
+    }
+    if (normSummary.includes(normQuery)) {
+      return 400;
+    }
+    if (normContent.includes(normQuery)) {
+      return 250;
+    }
+    return 0;
+  };
+
+  return pages
+    .map(page => ({ page, score: scorePage(page) }))
+    .filter(item => item.score > 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      // Prefer non-special Firestore articles over special routes on tie
+      if (a.page.namespace === 'Special' && b.page.namespace !== 'Special') return 1;
+      if (a.page.namespace !== 'Special' && b.page.namespace === 'Special') return -1;
+      return a.page.title.localeCompare(b.page.title);
+    })
+    .slice(0, maxResults)
+    .map(item => item.page);
+}
+
 /**
- * REAL-TIME SITE SEARCH USING FIRESTORE INDEXES
- * Subscribes to Firestore collection queries with range/prefix indexes on titleLower, title, and slug.
- * Updates in real-time as the user types and as pages are added or modified in Firestore.
+ * REAL-TIME RECENT PAGES SUBSCRIPTION FROM FIRESTORE
+ * Used when the header search bar is focused with an empty query for instant navigation.
+ */
+export function subscribeToRecentPages(
+  callback: (pages: WikiPage[]) => void,
+  maxResults = 6
+): Unsubscribe {
+  const qRecent = query(
+    collection(db, WIKI_PAGES_COLLECTION),
+    orderBy('updatedAt', 'desc'),
+    limit(maxResults)
+  );
+
+  return onSnapshot(
+    qRecent,
+    snapshot => {
+      const pages = snapshot.docs.map(d => d.data() as WikiPage);
+      if (pages.length > 0) {
+        callback(pages);
+      } else {
+        callback(Object.values(INITIAL_PAGES).slice(0, maxResults));
+      }
+    },
+    error => {
+      console.warn('Firestore recent pages subscription warning:', error);
+      callback(Object.values(INITIAL_PAGES).slice(0, maxResults));
+    }
+  );
+}
+
+/**
+ * REAL-TIME SITE SEARCH USING FIRESTORE INDEXES + REAL-TIME COLLECTION MATCHING
+ * Subscribes to Firestore collection queries with range/prefix indexes on titleLower, title, and slug,
+ * combined with a real-time collection listener for accent-insensitive, substring, and content search.
  */
 export function subscribeToSearchPageTitles(
   searchQuery: string,
   callback: (results: WikiPage[]) => void,
-  maxResults = 8
+  maxResults = 8,
+  onError?: (error: Error) => void
 ): Unsubscribe {
   const trimmed = searchQuery.trim();
   if (!trimmed) {
@@ -598,35 +788,43 @@ export function subscribeToSearchPageTitles(
     limit(maxResults)
   );
 
+  // 4. Real-time recent/active Firestore pages listener for substring, accent-insensitive & content matching
+  const qCollection = query(
+    collection(db, WIKI_PAGES_COLLECTION),
+    orderBy('updatedAt', 'desc'),
+    limit(100)
+  );
+
   let lowerDocs: WikiPage[] = [];
   let titleDocs: WikiPage[] = [];
   let slugDocs: WikiPage[] = [];
+  let collectionDocs: WikiPage[] = [];
+  let hasCollectionSnapshot = false;
 
   const emitRankedResults = () => {
     const map = new Map<string, WikiPage>();
     titleDocs.forEach(p => map.set(p.slug, p));
     lowerDocs.forEach(p => map.set(p.slug, p));
     slugDocs.forEach(p => map.set(p.slug, p));
-
-    const combined = Array.from(map.values());
-    combined.sort((a, b) => {
-      const aLower = (a.titleLower || a.title.toLowerCase());
-      const bLower = (b.titleLower || b.title.toLowerCase());
-
-      const aExact = aLower === lower;
-      const bExact = bLower === lower;
-      if (aExact && !bExact) return -1;
-      if (!aExact && bExact) return 1;
-
-      const aStarts = aLower.startsWith(lower);
-      const bStarts = bLower.startsWith(lower);
-      if (aStarts && !bStarts) return -1;
-      if (!aStarts && bStarts) return 1;
-
-      return a.title.localeCompare(b.title);
+    collectionDocs.forEach(p => {
+      if (!map.has(p.slug)) {
+        map.set(p.slug, p);
+      }
     });
 
-    callback(combined.slice(0, maxResults));
+    // If Firestore wiki_pages is still empty (fresh unseeded DB), include INITIAL_PAGES as baseline
+    if (hasCollectionSnapshot && map.size === 0) {
+      Object.values(INITIAL_PAGES).forEach(p => map.set(p.slug, p));
+    }
+
+    // Include built-in Special pages catalog for fast navigation
+    SPECIAL_PAGES_CATALOG.forEach(sp => {
+      if (!map.has(sp.slug)) {
+        map.set(sp.slug, sp);
+      }
+    });
+
+    callback(rankWikiSearchResults(Array.from(map.values()), trimmed, maxResults));
   };
 
   const unsubLower = onSnapshot(
@@ -637,6 +835,7 @@ export function subscribeToSearchPageTitles(
     },
     err => {
       console.warn('Firestore index search (qLower) error:', err);
+      emitRankedResults();
     }
   );
 
@@ -648,6 +847,7 @@ export function subscribeToSearchPageTitles(
     },
     err => {
       console.warn('Firestore index search (qTitle) error:', err);
+      emitRankedResults();
     }
   );
 
@@ -659,6 +859,22 @@ export function subscribeToSearchPageTitles(
     },
     err => {
       console.warn('Firestore index search (qSlug) error:', err);
+      emitRankedResults();
+    }
+  );
+
+  const unsubCollection = onSnapshot(
+    qCollection,
+    snap => {
+      hasCollectionSnapshot = true;
+      collectionDocs = snap.docs.map(d => d.data() as WikiPage);
+      emitRankedResults();
+    },
+    err => {
+      console.warn('Firestore search collection listener warning:', err);
+      hasCollectionSnapshot = true;
+      if (onError) onError(err);
+      emitRankedResults();
     }
   );
 
@@ -666,6 +882,7 @@ export function subscribeToSearchPageTitles(
     unsubLower();
     unsubTitle();
     unsubSlug();
+    unsubCollection();
   };
 }
 
@@ -678,7 +895,7 @@ export async function searchWikiPages(searchQuery: string): Promise<WikiPage[]> 
   const map = new Map<string, WikiPage>();
 
   try {
-    const [snapLower, snapTitle] = await Promise.all([
+    const [snapLower, snapTitle, snapAll] = await Promise.all([
       getDocs(
         query(
           collection(db, WIKI_PAGES_COLLECTION),
@@ -697,36 +914,39 @@ export async function searchWikiPages(searchQuery: string): Promise<WikiPage[]> 
           limit(10)
         )
       ),
+      getDocs(
+        query(
+          collection(db, WIKI_PAGES_COLLECTION),
+          orderBy('updatedAt', 'desc'),
+          limit(100)
+        )
+      ),
     ]);
 
     snapLower.forEach(d => map.set(d.id, d.data() as WikiPage));
     snapTitle.forEach(d => map.set(d.id, d.data() as WikiPage));
+    snapAll.forEach(d => {
+      if (!map.has(d.id)) {
+        map.set(d.id, d.data() as WikiPage);
+      }
+    });
   } catch (error) {
     console.warn('Firestore index query warning, scanning local list:', error);
     const allPages = await getAllPagesList();
-    allPages.forEach(page => {
-      if (
-        page.title.toLowerCase().includes(lower) ||
-        page.slug.toLowerCase().includes(lower) ||
-        page.content.toLowerCase().includes(lower)
-      ) {
-        map.set(page.slug, page);
-      }
-    });
+    allPages.forEach(page => map.set(page.slug, page));
   }
 
-  const list = Array.from(map.values());
-  list.sort((a, b) => {
-    const aLower = (a.titleLower || a.title.toLowerCase());
-    const bLower = (b.titleLower || b.title.toLowerCase());
-    if (aLower === lower) return -1;
-    if (bLower === lower) return 1;
-    if (aLower.startsWith(lower) && !bLower.startsWith(lower)) return -1;
-    if (!aLower.startsWith(lower) && bLower.startsWith(lower)) return 1;
-    return a.title.localeCompare(b.title);
+  if (map.size === 0) {
+    Object.values(INITIAL_PAGES).forEach(p => map.set(p.slug, p));
+  }
+
+  SPECIAL_PAGES_CATALOG.forEach(sp => {
+    if (!map.has(sp.slug)) {
+      map.set(sp.slug, sp);
+    }
   });
 
-  return list;
+  return rankWikiSearchResults(Array.from(map.values()), trimmed, 10);
 }
 
 export interface UserPagesResult {

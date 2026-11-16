@@ -12,7 +12,7 @@ import {
   limit,
   Unsubscribe,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { db, auth, handleFirestoreError, OperationType } from './firebase';
 import { CODEBASE_EXTENSIONS, ExtensionDefinition, WikiExtensionDoc, WikiFileDoc } from '../extensions';
 import { slugify } from '../core/parser';
 
@@ -32,7 +32,7 @@ export async function syncCodebaseExtensionsToFirestore(): Promise<{
   syncedCount: number;
   totalCodebase: number;
 }> {
-  if (isSyncing) {
+  if (isSyncing || !auth.currentUser || auth.currentUser.isAnonymous) {
     return { syncedCount: 0, totalCodebase: CODEBASE_EXTENSIONS.length };
   }
   isSyncing = true;
@@ -124,9 +124,10 @@ export function subscribeToExtensions(
       callback(list);
     },
     error => {
-      console.error('Erro na subscrição em tempo real de wiki_extensions:', error);
       if (onError) {
         onError(error);
+      } else {
+        handleFirestoreError(error, OperationType.LIST, WIKI_EXTENSIONS_COLLECTION);
       }
     }
   );
