@@ -1,0 +1,87 @@
+﻿Update 3.05
+
+
+07/10/2026
+3.05 - Aprimoramento na navegação geral, rastreio de dados, adicionar e alterar extensões;
+3.05.3.a - Modificação de extensões e adição de extensões já existentes;
+3.05.3.b - Transformar a opção de Suporte e Tickets em extensão, onde será possível modificar o link do suporte nas próprias configurações da extensão (padrão é: https://support.wazzimagiygg.com/) ;
+3.05.3.c - Transformar o redirecionamento de links externos (padrão é: https://wazzimagiygg.com/rv/?uid=) em extensão, no qual pode desativar o redirecionador, ou alterar o link do UID redirecionador;
+3.05.3.e - Adicionar extensão que define quando o WikiWorlWeb está em manutenção, onde apenas o burocrata pode acessar às configurações do Wiki, usando seu login por Google;
+3.05.3.g - Transformar Wiki dos Livros,Wiki Universitário e Jornal WazzimaGiygg em extensão que pode ser desativada;
+09/10/2026 (Atrasado)
+3.05.3.l - Adicionar extensão que desabilita a mudança de aparência, forçando a aparência padrão do Wiki ao entrar no Wiki-site quando extensão estiver desabilitada;
+3.05.3.l.1 - Corrigir o botão entre alternar entre claro e escuro no tema padrão do Wiki-site no qual ele não alterna realmente para versão clara, com contraste adaptado
+3.05.3.m - Adicionar extensão que permite adicionar uma página de "Outras regras", onde tal extensão permite inserir às regras de acordo com a personalização do burocrata;
+3.05.3.o - Adicionar a extensão que permite alterar o nome do Wiki (Padrão é WikiWorldWeb) para o nome que o burocrata quiser e o nome WikiZero, para o nome também que o burocrata quiser;
+3.05.3.p - Adicionar a extensão que permite o usuário alterar o favicom e o logo, com a URL de um favicom e logo personalizado. Acaso o URL for inválido, o Favicom volta a ser o padrão;
+3.05.3.l.I - Converter todas os temas de aparência em extensões que podem ser desabilitadas;
+3.05.3.q - Adicionar a extensão que permite o burocrata adicionar um CSS personalizado, dentro da configuração padrão do WikiWorldWeb, acaso o CSS não for válido, o CSS padrão se retorna;
+3.05.3.q.2 - Alterar metodologia de ativar e desativar extensões. Quando o burocrata fizer alguma ativação ou desativação, a página vai esperar até que às alterações sejam feitas para que depois o Wiki-site atualize automaticamente;
+3.05.3.q.3 - Certificar que às alterações sejam feitas no Firebase, na alteração de cada uma das extensões, porque mesmo desabilitando ela, ao abrir uma nova janela em outro computador ele ainda não aparece alterado
+
+
+10/10/2026
+3.05.3.r - Adicionar extensão que permite alterar a ordem dos menus da lateral ou ocultá-los, conforme o que o burocrata determinar;
+3.05.3.s - Adicionar extensão que permite habilitar e desabilitar a versão mobile
+3.05.3.u - Adicionar extensão que habilite ou desabilite o recaptcha de labirinto no login e que também personalize ou remova o tempo mínimo de realização do labirinto;
+3.05.3.v - Adicionar extensão que remova a mensagem de "Bloqueio de Nicknames WMF Ativo" no login ou substitua por outra mensagem de aviso personalizada;
+3.05.3.w - Adicionar extensão que altere a mensagem de "Boas vindas" na página principal para uma mensagem customizada pelo Burocrata ou deixe a padrão por arquivo do repositório;
+3.05.3.x - Adicionar extensão que determina qual idioma é o idioma padrão do Wiki-Site;
+11/10/2026
+3.05.3.y - Adicionar extensão que possa permitir personalizar a página principal, com a opção de remover a parte do "artigos em destaque", Painel de Estatística & Crescimento, Coleções temáticas & Artigos, a faixa da alternativa aberta e rápida, e o apoie a WikiWOrldWeb via Google Reader e até mesmo o botão do Assistente Gemini no canto direito abaixo;
+3.05.4.a - Otimizar visualização na versão SMARTV;
+3.05.4.b - Adicionar outras opções de entrada de data de nascimento no momento da entrada do Wiki-site;
+3.05.4.d  - Adicionar extensão para configuração de SMARTV;
+3.05.5.a - Correção da caixa de usuários logados;
+3.05.5.b - Correção, onde usuários banidos não podem ser considerados como usuários logados;
+3.05.5.c - Corrigir caixa de usuários, tornando a caixa mais dinâmica, mas sem mostrar quem está logado, somente a quantidade de usuários;
+12/10/2026
+3.05.3.aa - Adicionar extensão, nativa e não sincronizável com a nuvem, no qual a configuração é feita diretamente em arquivo onde fica a extensão, no qual permite o burocrata habilitar e desabilitar o backup geral para um banco de dados para um banco de dados SQL
+3.05.3.ab - Adicionar extensão que oculte o ícone dos usuários online na Wiki
+3.05.3.ac - Adicionar extensão de verificação de segurança de todas às extensões carregadas atualmente, para verificar atualizações, no qual alerta quando a quantidade de memória for maior de 200 MB
+3.05.3.ad - Adicionar extensão com link para importar o JSON do firebase-applet-config em site cadastrado, no qual a extensão não é sincronizável e é nativa por link dentro do arquivo da extensão. O link padrão é (https://gspotfverwazzimagiygg.wazzimagiygg.com/CHVX/MOC/?uid=NnihYOoIENGOqaHxj1jC) (Versão beta)
+O código de importação é feito pelo código de download de um HTML configurado em trazer um arquivo JSON de um site configurado em Firebase, no qual o código da página é:
+14/10/2026 (atrasado)
+3.05.6.a - Corrigir design falho de troca de idioma no popup acima, onde há uma duplicidade de botões
+3.05.6.b - Corrigir botão fora de esquadro (App Chrome & Computador) e simplificar ele com logotipo e emojis
+3.05.6.c - Corrigir tradução não completa na Wiki
+3.05.6.d - Corrigir o modo leitura, o contraste falho e onde não deve aparecer a categoria no momento da impressão 
+3.09.a - Chat em tempo real com outros usuários registrados e busca por outros usuários para chat, com extensão que pode habilitar e desabilitar o chat entre usuários sincronizado a opção pelo burocrata no Firebase 
+15/10/2026
+3.05.7.a - Bloquear o uso do comando de teclas como F7, F11 e F12
+3.05.7.b - Adicionar a página de ajuda geral de uso da Wiki, usando a tecla F1
+3.05.3.ad - Adicionar extensão no qual permite habilitar ou desabilitar a ajuda geral do Wiki-site, ao pressionar o botão F1
+3.05.8.a - Criar estrutura da página de ajuda em geral, editável pelo Burocrata pelos arquivos locais, onde fica a extensão
+3.05.8.b - Inserir opção de tela cheia no Wiki-Site
+16/10/2026
+3.05.3.af - Adicionar extensão de Checklist diário para cada usuário realizar, para acumular pontos
+3.05.8.b - Inserir checklist baseado em pontos diários que o usuário pode receber, acumulados durante o mês:
+3.05.8.b.a - Fazer login no Wiki-Site (1 ponto)
+3.05.8.b.b - Fazer uma contribuição (0.20 pontos)
+3.05.8.b.c - Fazer avaliação de um artigo (1 ponto)
+3.05.8.b.d - Fazer doação ao Wiki-site (10 pontos, se comprovado a doação, no qual Burocrata concede manualmente os pontos)
+3.05.8.b.d.a - Inserir a funcionalidade ao burocrata de adicionar pontos manualmente à usuários
+3.05.3.c - Adicionar alerta de checklist diário no Alertas Push, já presente no Wiki-Site
+17/10/2026
+3.05.9.a - Adicionar despacho de todas às informações e backup em download de toda às informações em JSON para o computador
+3.05.9.b - Adicionar upload de todas às informações em JSON do computador
+3.05.9.c - Adicionar download de todas às regras do FIrebase para o computador em JSON
+3.05.9.d - Adicionar upload de todas às regras do FIrebase do computador em JSON
+3.05.9.e - Adicionar download de todas às coleções do FIrebase para o computador em JSON
+3.05.9.f - Adicionar upload de todas às coleções do FIrebase do computador em JSON
+18/10/2026
+3.05.9.a - Adicionar dispositivo de segurança para sincronia de extensões
+3.05.9.b - Adicionar dispositivo para verificação de informações maliciosas dentro dos arquivos das extensões
+19/10/2026
+3.05.10.a - Adicionar suporte i18n para tradução universal de todas as páginas e toda a Wiki-Site 
+20/10/2026 (atrasado)
+3.05.11 - Adicionar configuração de auto-atualização conforme o uso do site, e verificação automática se há mudanças em tempo real nas extensões no Firebase
+21/10/2026 (Atrasado)
+3.05.6.c - Adicionar busca por usuários, diffs, coleções, aparências e temas (enfim, uma busca unificada, onde se diferencia cada setor pelas tags iniciais, que por exemplo: Usuário seria "User:" e aparência, seria "Skin:";
+22/10/2026
+3.05.3.ag - Adicionar extensão que permite a variável GEMINI_API_KEY para uso do Gemini no Wiki-Site
+24/10/2026
+3.05.6.d - Inserir o uso do retornar e avançar para navegar pelo UID presente no URL da Wiki
+25/10/2026
+3.05.5.d – Padronizar todos os tipos de exportar relatório em PDF com artigo padronizado 
+Tornar o Wiki-Site versão 3.06
